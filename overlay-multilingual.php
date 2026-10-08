@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Overlay Multilingual
  * Description:       Make a WordPress or WooCommerce site multilingual without duplicating content. Translations are layered over the original posts, products and terms, so there is one product, one stock level and one order flow in every language.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            Overlay Multilingual contributors
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OVML_VERSION', '1.0.0' );
+define( 'OVML_VERSION', '1.1.0' );
 define( 'OVML_FILE', __FILE__ );
 define( 'OVML_DIR', __DIR__ );
 define( 'OVML_URL', plugin_dir_url( __FILE__ ) );
@@ -31,6 +31,7 @@ require_once OVML_DIR . '/includes/class-dictionary.php';
 require_once OVML_DIR . '/includes/class-seo.php';
 require_once OVML_DIR . '/includes/class-switcher.php';
 require_once OVML_DIR . '/includes/class-detect.php';
+require_once OVML_DIR . '/includes/class-updater.php';
 require_once OVML_DIR . '/includes/integrations/woocommerce.php';
 require_once OVML_DIR . '/includes/integrations/rank-math.php';
 require_once OVML_DIR . '/includes/integrations/yoast.php';
@@ -54,6 +55,7 @@ add_action( 'plugins_loaded', static function () {
 	OverlayML\SEO::init();
 	OverlayML\Switcher::init();
 	OverlayML\Detect::init();
+	OverlayML\Updater::init();
 	OverlayML\Integrations\WooCommerce::init();
 	OverlayML\Integrations\RankMath::init();
 	OverlayML\Integrations\Yoast::init();

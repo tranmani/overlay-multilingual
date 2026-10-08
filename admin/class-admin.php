@@ -280,6 +280,31 @@ class Admin {
 				<form method="post"><?php wp_nonce_field( 'ovml_save', 'ovml_nonce' ); ?><input type="hidden" name="ovml_action" value="install_early"><button class="button"><?php esc_html_e( 'Install', 'overlay-multilingual' ); ?></button></form>
 			<?php endif; ?>
 		</div>
+
+		<?php if ( ! empty( $s['advanced']['updates'] ) ) : ?>
+			<?php $update = \OverlayML\Updater::has_update(); $latest = \OverlayML\Updater::latest(); ?>
+			<div class="ovml-card ovml-card-row">
+				<div>
+					<h2><?php esc_html_e( 'Updates', 'overlay-multilingual' ); ?></h2>
+					<p class="ovml-hint" style="margin:0">
+						<?php
+						printf( /* translators: %s: version */ esc_html__( 'Installed: %s', 'overlay-multilingual' ), esc_html( OVML_VERSION ) );
+						echo ' · ';
+						echo $latest ? sprintf( /* translators: %s: version */ esc_html__( 'Latest release: %s', 'overlay-multilingual' ), esc_html( $latest['version'] ) ) : esc_html__( 'Latest release: not checked yet', 'overlay-multilingual' );
+						?>
+						<?php if ( $latest ) : ?> · <a href="<?php echo esc_url( $latest['url'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Release notes', 'overlay-multilingual' ); ?></a><?php endif; ?>
+					</p>
+				</div>
+				<div style="display:flex;gap:8px">
+					<form method="post"><?php wp_nonce_field( 'ovml_save', 'ovml_nonce' ); ?><input type="hidden" name="ovml_action" value="check_updates"><button class="button"><?php esc_html_e( 'Check for updates', 'overlay-multilingual' ); ?></button></form>
+					<?php if ( $update && current_user_can( 'update_plugins' ) ) : ?>
+						<a class="button button-primary" href="<?php echo esc_url( \OverlayML\Updater::update_url() ); ?>"><?php printf( /* translators: %s: version */ esc_html__( 'Update to %s', 'overlay-multilingual' ), esc_html( $update['version'] ) ); ?></a>
+					<?php else : ?>
+						<span class="ovml-pill ovml-pill--ok" style="align-self:center"><?php esc_html_e( 'Up to date', 'overlay-multilingual' ); ?></span>
+					<?php endif; ?>
+				</div>
+			</div>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -680,6 +705,7 @@ class Admin {
 				<div style="margin-top:16px">
 					<div class="ovml-field ovml-checks" style="flex-direction:column;align-items:flex-start">
 						<label><input type="checkbox" name="adv[translate_attributes]" value="1" <?php checked( ! empty( $s['advanced']['translate_attributes'] ) ); ?>> <?php esc_html_e( 'Translate image alt text, tooltips, placeholders and ARIA labels through the phrase list', 'overlay-multilingual' ); ?></label>
+						<label><input type="checkbox" name="adv[updates]" value="1" <?php checked( ! empty( $s['advanced']['updates'] ) ); ?>> <?php esc_html_e( 'Check GitHub for new versions and offer one-click updates', 'overlay-multilingual' ); ?></label>
 						<label><input type="checkbox" name="preview_badge" value="1" <?php checked( ! empty( $s['preview_badge'] ) ); ?>> <?php esc_html_e( 'Show a "Translation preview" badge with an exit link while previewing', 'overlay-multilingual' ); ?></label>
 					</div>
 					<div class="ovml-field">
@@ -730,6 +756,13 @@ class Admin {
 			case 'regenerate_key':
 				self::update( [ 'preview_key' => wp_generate_password( 24, false ) ] );
 				self::flash( __( 'New preview link created. The old one no longer works.', 'overlay-multilingual' ) );
+				break;
+
+			case 'check_updates':
+				delete_site_transient( 'update_plugins' );
+				$latest = \OverlayML\Updater::latest( true );
+				wp_update_plugins();
+				self::flash( $latest ? sprintf( /* translators: %s: version */ __( 'Latest release: %s.', 'overlay-multilingual' ), $latest['version'] ) : __( 'Could not reach GitHub. Try again later.', 'overlay-multilingual' ), $latest ? 'success' : 'error' );
 				break;
 
 			case 'install_early':
@@ -857,6 +890,7 @@ class Admin {
 			],
 			'advanced'        => [
 				'translate_attributes' => ! empty( $_POST['adv']['translate_attributes'] ),
+				'updates'              => ! empty( $_POST['adv']['updates'] ),
 				'excluded_paths'       => $paths,
 			],
 		] );

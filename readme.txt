@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,7 @@ Overlay Multilingual layers translations over your existing posts, pages, produc
 * **Safe rollout** — Off, Preview (only for browsers that opened a secret link) and Live.
 * **Language switcher** — shortcode, template tag or automatic placement on any theme hook; dropdown, inline or theme-native style.
 * **Popups** — Brave Popup Builder popups are translated through the phrase list.
+* **Updates** — new GitHub releases appear in WordPress's normal updates with a one-click "Update now".
 * **Developer friendly** — WP-CLI import/export in one JSON format, filters for everything, no external services, no tracking, no ads.
 
 == Installation ==
@@ -53,6 +54,12 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.1.0 =
+* One-click updates from GitHub releases (Dashboard → Updates, Plugins screen and the Overview).
+* Brave Popup Builder popups are translated.
+* Site scan compares default and translated pages, so only untranslated text is listed.
+* More settings: detection scope, cookie lifetime, switcher behaviour for untranslated pages, x-default, SEO title format, WooCommerce options, excluded paths, preview badge.
 
 = 1.0.0 =
 * First release.

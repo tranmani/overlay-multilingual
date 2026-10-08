@@ -57,6 +57,7 @@ function ovml_default_settings() {
 		'advanced'         => [
 			'translate_attributes' => true, // alt, title, placeholder, aria-label
 			'excluded_paths'       => '', // one path prefix per line, never translated
+			'updates'              => true, // check GitHub releases for new versions
 		],
 	];
 }
