@@ -120,12 +120,6 @@ function ovml_enabled() {
 	return $enabled = isset( $_COOKIE['ovml_preview'] ) && hash_equals( $key, (string) $_COOKIE['ovml_preview'] );
 }
 
-/** Whether the request carries a valid preview cookie (also used to authorise string scans). */
-function ovml_has_preview_cookie() {
-	$key = (string) ovml_settings()['preview_key'];
-	return '' !== $key && isset( $_COOKIE['ovml_preview'] ) && hash_equals( $key, (string) $_COOKIE['ovml_preview'] );
-}
-
 function ovml_is_preview() {
 	return ovml_enabled() && 'live' !== ovml_settings()['status'];
 }

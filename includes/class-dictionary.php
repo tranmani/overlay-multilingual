@@ -10,8 +10,9 @@
  * so nothing a form submits can change. Stored per language in the options
  * `ovml_dict_{lang}` as [source => translation].
  *
- * While scanning (?ovml_collect=1 on a preview request) untranslated phrases
- * are recorded in `ovml_missing` for the Strings screen.
+ * Untranslated phrases are found by the scanner on the Strings screen, which
+ * compares each page in the default and a secondary language (see
+ * extract_phrases()) and records them in `ovml_missing`.
  *
  * @package OverlayML
  */
@@ -29,7 +30,6 @@ class Dictionary {
 			return;
 		}
 		add_action( 'template_redirect', [ __CLASS__, 'start_buffer' ], 99 );
-		add_action( 'shutdown', [ __CLASS__, 'save_missing' ], 5 ); // after wp_ob_end_flush_all() at priority 1
 	}
 
 	public static function get( $lang ) {
@@ -60,18 +60,42 @@ class Dictionary {
 		if ( ovml_is_default( ovml_lang() ) || is_feed() || is_robots() || wp_doing_ajax() ) {
 			return;
 		}
-		$GLOBALS['ovml_collecting'] = ! empty( $_GET['ovml_collect'] ) && ovml_has_preview_cookie();
 		// A closure, because PHP passes buffer callbacks a second argument (the
 		// buffer phase flags), which must not be mistaken for a language code.
 		ob_start( static fn( $html ) => self::translate_html( $html ) );
 	}
 
-	/** Strings worth collecting: words, not prices, codes or addresses. */
-	private static function collectable( $key ) {
-		return mb_strlen( $key ) >= 2 && mb_strlen( $key ) <= 500
-			&& preg_match( '/\p{L}{2,}/u', $key )
-			&& ! preg_match( '#^(https?://|www\.|[\w.+-]+@[\w-]+\.)#i', $key )
-			&& ! preg_match( '/^[\p{Sc}A-Z]{0,3}\s*[\d.,\s\'’]+\s*[\p{Sc}A-Z]{0,3}$/u', $key );
+	/** Strings worth collecting: words, not prices, codes, identifiers or addresses. */
+	public static function collectable( $key ) {
+		if ( mb_strlen( $key ) < 2 || mb_strlen( $key ) > 600 || ! preg_match( '/\p{L}{2,}/u', $key ) ) {
+			return false;
+		}
+		if ( preg_match( '#^(https?://|www\.|[\w.+-]+@[\w-]+\.)#i', $key ) ) {
+			return false;
+		}
+		if ( preg_match( '/^[\p{Sc}A-Z]{0,3}\s*[\d.,\s\'’]+\s*[\p{Sc}A-Z]{0,3}$/u', $key ) ) {
+			return false;
+		}
+		// Single tokens that look like identifiers: cookie names, slugs, domains.
+		if ( false === strpos( $key, ' ' ) && ( false !== strpos( $key, '_' ) || preg_match( '/^[a-z0-9]+(-[a-z0-9]+)+$/', $key ) || preg_match( '/\.[a-z]{2,6}$/', $key ) ) ) {
+			return false;
+		}
+		return true;
+	}
+
+	/** Visible phrases of a page: text nodes plus alt/title/placeholder/aria-label. */
+	public static function extract_phrases( $html ) {
+		$html    = preg_replace( '#<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>|<!--.*?-->#is', ' ', (string) $html );
+		$found   = [];
+		preg_match_all( '#>([^<]+)<#u', $html, $text );
+		preg_match_all( '#\s(?:alt|title|placeholder|aria-label)="([^"]+)"#u', $html, $attrs );
+		foreach ( array_merge( $text[1], $attrs[1] ) as $raw ) {
+			$key = ovml_normalise( $raw );
+			if ( '' !== $key && self::collectable( $key ) ) {
+				$found[ $key ] = true;
+			}
+		}
+		return $found;
 	}
 
 	public static function translate_html( $html, $lang = null ) {
@@ -79,22 +103,11 @@ class Dictionary {
 		if ( ovml_is_default( $lang ) || ! is_string( $html ) || '' === $html ) {
 			return $html;
 		}
-		$dict    = self::get( $lang );
-		$collect = ! empty( $GLOBALS['ovml_collecting'] );
-		$missing = [];
+		$dict = self::get( $lang );
 
-		$swap = static function ( $raw ) use ( $dict, $collect, &$missing ) {
+		$swap = static function ( $raw ) use ( $dict ) {
 			$key = ovml_normalise( $raw );
-			if ( '' === $key ) {
-				return null;
-			}
-			if ( isset( $dict[ $key ] ) && '' !== $dict[ $key ] ) {
-				return $dict[ $key ];
-			}
-			if ( $collect && self::collectable( $key ) ) {
-				$missing[ $key ] = true;
-			}
-			return null;
+			return ( '' !== $key && isset( $dict[ $key ] ) && '' !== $dict[ $key ] ) ? $dict[ $key ] : null;
 		};
 
 		$parts = preg_split( '#(<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>|<!--.*?-->)#is', $html, -1, PREG_SPLIT_DELIM_CAPTURE );
@@ -127,9 +140,6 @@ class Dictionary {
 			$parts[ $i ] = self::replace_text_only( $part, $lang );
 		}
 
-		if ( $missing ) {
-			$GLOBALS['ovml_missing'] = array_merge( $GLOBALS['ovml_missing'] ?? [], $missing );
-		}
 		return implode( '', $parts );
 	}
 
@@ -142,14 +152,4 @@ class Dictionary {
 		return preg_replace_callback( '#>([^<]+)<#u', static fn( $m ) => '>' . strtr( $m[1], $map ) . '<', $html );
 	}
 
-	public static function save_missing() {
-		if ( empty( $GLOBALS['ovml_missing'] ) ) {
-			return;
-		}
-		$all = (array) get_option( 'ovml_missing', [] );
-		foreach ( array_keys( $GLOBALS['ovml_missing'] ) as $key ) {
-			$all[ $key ] = true;
-		}
-		update_option( 'ovml_missing', $all, false );
-	}
 }

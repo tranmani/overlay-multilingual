@@ -77,7 +77,7 @@ function ovml_current_url() {
 
 /** Current URL without query arguments that should not travel between languages. */
 function ovml_clean_url( $url ) {
-	$drop = apply_filters( 'ovml_switcher_drop_query_args', [ 'ovml_preview', 'ovml_collect', 'add-to-cart', '_wpnonce' ] );
+	$drop = apply_filters( 'ovml_switcher_drop_query_args', [ 'ovml_preview', 'add-to-cart', '_wpnonce' ] );
 	return remove_query_arg( $drop, $url );
 }
 

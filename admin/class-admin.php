@@ -904,30 +904,42 @@ class Admin {
 	}
 
 	/**
-	 * Scan: request every translatable URL in the first secondary language with
-	 * the preview cookie and ?ovml_collect=1, so untranslated phrases are recorded.
+	 * Scan: fetch every translatable page in the default language and in the
+	 * first secondary language. A phrase that appears identically in both is
+	 * untranslated text; anything a language pack or a translation already
+	 * changed is ignored, so the list holds only what really needs work.
 	 */
 	public static function ajax_scan() {
 		self::ajax_guard();
-		$lang  = ovml_secondary_languages()[0] ?? '';
-		$step  = (int) ( $_POST['offset'] ?? 0 );
-		$urls  = get_transient( 'ovml_scan_urls' );
+		$lang = ovml_secondary_languages()[0] ?? '';
+		$step = (int) ( $_POST['offset'] ?? 0 );
+		$urls = get_transient( 'ovml_scan_urls' );
 		if ( 0 === $step || ! is_array( $urls ) ) {
 			$urls = self::scan_urls( $lang );
 			set_transient( 'ovml_scan_urls', $urls, HOUR_IN_SECONDS );
 			update_option( 'ovml_scan_before', count( (array) get_option( 'ovml_missing', [] ) ), false );
 		}
-		$batch = array_slice( $urls, $step, 4 );
-		$host  = (string) wp_parse_url( ovml_root(), PHP_URL_HOST );
+		$batch   = array_slice( $urls, $step, 3 );
+		$host    = (string) wp_parse_url( ovml_root(), PHP_URL_HOST );
+		$args    = [
+			'timeout'     => 30,
+			'redirection' => 2,
+			'cookies'     => [ new \WP_Http_Cookie( [ 'name' => 'ovml_preview', 'value' => ovml_settings()['preview_key'], 'domain' => $host ] ) ],
+		];
+		$missing = (array) get_option( 'ovml_missing', [] );
+		$dict    = Dictionary::get( $lang );
 		foreach ( $batch as $url ) {
-			wp_remote_get( add_query_arg( 'ovml_collect', '1', $url ), [
-				'timeout'     => 30,
-				'redirection' => 2,
-				'cookies'     => [ new \WP_Http_Cookie( [ 'name' => 'ovml_preview', 'value' => ovml_settings()['preview_key'], 'domain' => $host ] ) ],
-			] );
+			$original   = Dictionary::extract_phrases( wp_remote_retrieve_body( wp_remote_get( ovml_url( $url, ovml_default_language() ), $args ) ) );
+			$translated = Dictionary::extract_phrases( wp_remote_retrieve_body( wp_remote_get( $url, $args ) ) );
+			foreach ( array_keys( array_intersect_key( $original, $translated ) ) as $phrase ) {
+				if ( empty( $dict[ $phrase ] ) ) {
+					$missing[ $phrase ] = true;
+				}
+			}
 		}
+		update_option( 'ovml_missing', $missing, false );
 		$next  = $step + count( $batch );
-		$found = count( (array) get_option( 'ovml_missing', [] ) ) - (int) get_option( 'ovml_scan_before', 0 );
+		$found = count( $missing ) - (int) get_option( 'ovml_scan_before', 0 );
 		wp_send_json_success( [ 'next' => $next, 'total' => count( $urls ), 'done' => $next >= count( $urls ), 'found' => max( 0, $found ) ] );
 	}
 
