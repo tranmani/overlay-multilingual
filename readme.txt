@@ -23,6 +23,7 @@ Overlay Multilingual layers translations over your existing posts, pages, produc
 * **SEO** — hreflang with x-default, translated html lang, noindex for untranslated pages, a sitemap of translated URLs; Rank Math and Yoast titles, descriptions, robots and og:locale.
 * **Safe rollout** — Off, Preview (only for browsers that opened a secret link) and Live.
 * **Language switcher** — shortcode, template tag or automatic placement on any theme hook; dropdown, inline or theme-native style.
+* **Popups** — Brave Popup Builder popups are translated through the phrase list.
 * **Developer friendly** — WP-CLI import/export in one JSON format, filters for everything, no external services, no tracking, no ads.
 
 == Installation ==

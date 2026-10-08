@@ -35,6 +35,7 @@ require_once OVML_DIR . '/includes/integrations/woocommerce.php';
 require_once OVML_DIR . '/includes/integrations/rank-math.php';
 require_once OVML_DIR . '/includes/integrations/yoast.php';
 require_once OVML_DIR . '/includes/integrations/elessi.php';
+require_once OVML_DIR . '/includes/integrations/bravepop.php';
 
 if ( is_admin() ) {
 	require_once OVML_DIR . '/admin/class-admin.php';
@@ -57,6 +58,7 @@ add_action( 'plugins_loaded', static function () {
 	OverlayML\Integrations\RankMath::init();
 	OverlayML\Integrations\Yoast::init();
 	OverlayML\Integrations\Elessi::init();
+	OverlayML\Integrations\BravePop::init();
 	if ( is_admin() ) {
 		OverlayML\Admin\Admin::init();
 		OverlayML\Admin\Editor::init();
