@@ -1,0 +1,140 @@
+/* Overlay Multilingual — admin. Uses WordPress admin colour variables where available. */
+.ovml {
+	--ovml-accent: var(--wp-admin-theme-color, #2271b1);
+	--ovml-accent-soft: color-mix(in srgb, var(--ovml-accent) 10%, #fff);
+	--ovml-text: #1d2327;
+	--ovml-muted: #646970;
+	--ovml-line: #e2e4e7;
+	--ovml-surface: #fff;
+	--ovml-ok: #1a7f37;
+	--ovml-ok-soft: #e6f4ea;
+	--ovml-warn: #9a6700;
+	--ovml-warn-soft: #fff4d6;
+	--ovml-radius: 10px;
+	max-width: 1180px;
+	margin: 20px 20px 40px 0;
+	color: var(--ovml-text);
+}
+.ovml *, .ovml *::before, .ovml *::after { box-sizing: border-box; }
+.ovml [hidden] { display: none !important; }
+.ovml-field > .ovml-segmented, .ovml-field > .ovml-checks { justify-self: start; }
+
+.ovml-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 4px; }
+.ovml-header h1 { font-size: 23px; font-weight: 600; margin: 0; padding: 0; line-height: 1.3; }
+.ovml-sub { color: var(--ovml-muted); margin: 4px 0 20px; font-size: 13px; }
+
+.ovml-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--ovml-line); margin-bottom: 24px; flex-wrap: wrap; }
+.ovml-tabs a { padding: 10px 14px; text-decoration: none; color: var(--ovml-muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.ovml-tabs a:hover { color: var(--ovml-text); }
+.ovml-tabs a.is-active { color: var(--ovml-text); border-bottom-color: var(--ovml-accent); }
+.ovml-tabs a:focus { box-shadow: none; outline: 2px solid var(--ovml-accent); outline-offset: -2px; border-radius: 4px; }
+
+.ovml-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ovml-card { background: var(--ovml-surface); border: 1px solid var(--ovml-line); border-radius: var(--ovml-radius); padding: 20px; margin-bottom: 16px; }
+.ovml-grid .ovml-card { margin-bottom: 0; }
+.ovml-card h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.ovml-card > p:first-of-type { margin-top: 0; }
+.ovml-card .ovml-hint { color: var(--ovml-muted); margin: 0 0 16px; }
+.ovml-card-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+.ovml-stat { display: flex; flex-direction: column; gap: 6px; }
+.ovml-stat__label { color: var(--ovml-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.ovml-stat__value { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.ovml-stat__meta { color: var(--ovml-muted); font-size: 12px; }
+
+.ovml-progress { height: 6px; background: #f0f0f1; border-radius: 99px; overflow: hidden; }
+.ovml-progress > span { display: block; height: 100%; background: var(--ovml-accent); border-radius: inherit; transition: width .3s ease; }
+.ovml-coverage { display: grid; grid-template-columns: 110px 1fr 70px; gap: 6px 12px; align-items: center; font-size: 13px; }
+.ovml-coverage .num { text-align: right; color: var(--ovml-muted); font-variant-numeric: tabular-nums; }
+
+.ovml-segmented { display: inline-flex; background: #f0f0f1; border-radius: 8px; padding: 3px; gap: 2px; }
+.ovml-segmented label { position: relative; }
+.ovml-segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.ovml-segmented span { display: block; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; color: var(--ovml-muted); transition: background .15s, color .15s; }
+.ovml-segmented input:checked + span { background: #fff; color: var(--ovml-text); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04); }
+.ovml-segmented input:focus-visible + span { outline: 2px solid var(--ovml-accent); }
+
+.ovml-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 500; line-height: 1.6; white-space: nowrap; }
+.ovml-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ovml-pill--ok { background: var(--ovml-ok-soft); color: var(--ovml-ok); }
+.ovml-pill--warn { background: var(--ovml-warn-soft); color: var(--ovml-warn); }
+.ovml-pill--off { background: #f0f0f1; color: var(--ovml-muted); }
+.ovml-pill--live { background: var(--ovml-ok-soft); color: var(--ovml-ok); }
+
+.ovml-field { display: grid; gap: 6px; margin-bottom: 16px; }
+.ovml-field > label, .ovml-field > .ovml-label { font-weight: 600; }
+.ovml-field .description { color: var(--ovml-muted); margin: 0; }
+.ovml input[type=text], .ovml input[type=search], .ovml input[type=number], .ovml select, .ovml textarea { border-radius: 6px; border-color: #c3c4c7; }
+.ovml textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.ovml-checks { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.ovml-checks label { display: inline-flex; align-items: center; gap: 6px; }
+
+.ovml-copy { display: flex; gap: 8px; align-items: stretch; }
+.ovml-copy input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+.ovml-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--ovml-surface); border: 1px solid var(--ovml-line); border-radius: var(--ovml-radius); overflow: hidden; }
+.ovml-table th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ovml-muted); text-transform: uppercase; letter-spacing: .04em; padding: 10px 14px; background: #f9fafb; border-bottom: 1px solid var(--ovml-line); }
+.ovml-table td { padding: 10px 14px; border-bottom: 1px solid var(--ovml-line); vertical-align: middle; }
+.ovml-table tr:last-child td { border-bottom: 0; }
+.ovml-table tr:hover td { background: #fcfcfd; }
+.ovml-table .ovml-source { color: var(--ovml-text); max-width: 420px; word-break: break-word; }
+.ovml-table input[type=text] { width: 100%; }
+.ovml-table input.is-saving { border-color: var(--ovml-accent); }
+.ovml-table input.is-saved { border-color: var(--ovml-ok); box-shadow: 0 0 0 1px var(--ovml-ok); }
+.ovml-table input.is-error { border-color: #d63638; box-shadow: 0 0 0 1px #d63638; }
+.ovml-table .row-actions-ovml { opacity: 0; transition: opacity .15s; }
+.ovml-table tr:hover .row-actions-ovml { opacity: 1; }
+
+.ovml-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.ovml-toolbar .spacer { flex: 1; }
+.ovml-toolbar input[type=search] { min-width: 260px; }
+
+.ovml-empty { text-align: center; padding: 48px 20px; color: var(--ovml-muted); }
+.ovml-empty strong { display: block; color: var(--ovml-text); font-size: 15px; margin-bottom: 6px; }
+
+.ovml-scan { display: none; margin-bottom: 14px; }
+.ovml-scan.is-running { display: block; }
+.ovml-scan .ovml-progress { margin-top: 8px; }
+
+.ovml-lang-row { display: grid; grid-template-columns: 80px 1.2fr 1fr 1fr 1.4fr 64px; gap: 10px; align-items: start; }
+.ovml-lang-row > input[type=radio] { justify-self: center; }
+.ovml-lang-head > span:last-child { text-align: center; }
+.ovml-add-lang { margin-top: 12px; }
+.ovml-lang-row + .ovml-lang-row { margin-top: 10px; }
+.ovml-lang-head { font-size: 12px; color: var(--ovml-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.ovml-lang-row textarea { min-height: 32px; height: 32px; resize: vertical; }
+
+.ovml-steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; counter-reset: ovml-step; }
+.ovml-steps li { counter-increment: ovml-step; display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid var(--ovml-line); border-radius: 8px; }
+.ovml-steps li::before { content: counter(ovml-step); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: #f0f0f1; color: var(--ovml-muted); }
+.ovml-steps li.is-done::before { content: "✓"; background: var(--ovml-ok-soft); color: var(--ovml-ok); }
+.ovml-steps li.is-done a { color: var(--ovml-muted); text-decoration: line-through; text-decoration-color: rgba(0,0,0,.25); }
+.ovml-steps a { text-decoration: none; font-weight: 500; color: var(--ovml-text); }
+.ovml-steps a:hover { color: var(--ovml-accent); }
+details.ovml-card > summary { list-style: none; }
+details.ovml-card > summary::-webkit-details-marker { display: none; }
+details.ovml-card > summary::after { content: "+"; float: right; font-size: 18px; color: var(--ovml-muted); }
+details.ovml-card[open] > summary::after { content: "–"; }
+.ovml-callout { border-left: 3px solid var(--ovml-accent); background: var(--ovml-accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 16px; }
+.ovml-callout--warn { border-left-color: var(--ovml-warn); background: var(--ovml-warn-soft); }
+.ovml-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* Edit-screen panel */
+.ovml-editor { margin: -6px -12px -12px; }
+.ovml-editor__tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--ovml-line); padding: 0 12px; }
+.ovml-editor__tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 12px; margin-bottom: -1px; cursor: pointer; font-weight: 500; color: var(--ovml-muted); display: inline-flex; align-items: center; gap: 8px; }
+.ovml-editor__tabs button[aria-selected=true] { color: var(--ovml-text); border-bottom-color: var(--ovml-accent); }
+.ovml-editor__panel { padding: 16px 12px 4px; }
+.ovml-editor__panel[hidden] { display: none; }
+.ovml-editor .ovml-field input[type=text], .ovml-editor .ovml-field textarea { width: 100%; }
+.ovml-editor .ovml-field-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.ovml-editor .ovml-count { color: var(--ovml-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ovml-editor .ovml-count.is-over { color: #d63638; }
+.ovml-editor .button-link { font-size: 12px; }
+.ovml-term-panel { max-width: 780px; }
+
+@media (max-width: 782px) {
+	.ovml { margin-right: 10px; }
+	.ovml-lang-row { grid-template-columns: 1fr 1fr; }
+	.ovml-lang-head { display: none; }
+}
