@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,8 @@ Overlay Multilingual layers translations over your existing posts, pages, produc
 * **Safe rollout** — Off, Preview (only for browsers that opened a secret link) and Live.
 * **Language switcher** — shortcode, template tag or automatic placement on any theme hook; dropdown, inline or theme-native style.
 * **Popups** — Brave Popup Builder popups are translated through the phrase list.
+* **AI translation** — bring your own Anthropic (Claude) or OpenAI key; translate missing phrases, whole content types or a single edit-screen tab, with HTML checked before saving.
+* **Language packs** — WordPress, WooCommerce and plugin/theme text in each language is downloaded automatically.
 * **Updates** — new GitHub releases appear in WordPress's normal updates with a one-click "Update now".
 * **Developer friendly** — WP-CLI import/export in one JSON format, filters for everything, no external services, no tracking, no ads.
 
@@ -54,6 +56,14 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.3.0 =
+* AI translation with your own Anthropic (Claude) or OpenAI API key: model chooser with custom model IDs, quality setting, instructions/glossary, Test connection, and "Translate with AI" for missing phrases, whole content types, or one edit-screen tab. HTML structure is verified before anything is saved.
+* Language packs are installed automatically: adding a language downloads the WordPress core pack plus every available plugin and theme translation; "Install / update language packs" refreshes them.
+* Built for many languages: Strings shows one language at a time beyond three, Content uses compact per-language chips, edit-screen tabs wrap and stay light, the switcher dropdown scrolls, and sitemaps are split per language and paginated (cached).
+* Locale suggestions for every WordPress locale, with the native name filled in automatically.
+* Elements marked translate="no" are never changed by the phrase list (switcher language names stay in their own language).
+* Update check runs in place (no page reload) and no longer claims "up to date" before checking.
 
 = 1.2.0 =
 * About tab with links to the GitHub project, issues and releases, and copyable system information for bug reports.

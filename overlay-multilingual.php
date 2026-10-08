@@ -3,7 +3,7 @@
  * Plugin Name:       Overlay Multilingual
  * Plugin URI:        https://github.com/tranmani/overlay-multilingual
  * Description:       Make a WordPress or WooCommerce site multilingual without duplicating content. Translations are layered over the original posts, products and terms, so there is one product, one stock level and one order flow in every language.
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            Overlay Multilingual contributors
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OVML_VERSION', '1.2.0' );
+define( 'OVML_VERSION', '1.3.0' );
 define( 'OVML_FILE', __FILE__ );
 define( 'OVML_DIR', __DIR__ );
 define( 'OVML_URL', plugin_dir_url( __FILE__ ) );
@@ -33,6 +33,7 @@ require_once OVML_DIR . '/includes/class-seo.php';
 require_once OVML_DIR . '/includes/class-switcher.php';
 require_once OVML_DIR . '/includes/class-detect.php';
 require_once OVML_DIR . '/includes/class-updater.php';
+require_once OVML_DIR . '/includes/class-ai.php';
 require_once OVML_DIR . '/includes/integrations/woocommerce.php';
 require_once OVML_DIR . '/includes/integrations/rank-math.php';
 require_once OVML_DIR . '/includes/integrations/yoast.php';
@@ -42,6 +43,7 @@ require_once OVML_DIR . '/includes/integrations/bravepop.php';
 if ( is_admin() ) {
 	require_once OVML_DIR . '/admin/class-admin.php';
 	require_once OVML_DIR . '/admin/class-editor.php';
+	require_once OVML_DIR . '/admin/class-ai-admin.php';
 }
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -65,6 +67,7 @@ add_action( 'plugins_loaded', static function () {
 	if ( is_admin() ) {
 		OverlayML\Admin\Admin::init();
 		OverlayML\Admin\Editor::init();
+		OverlayML\Admin\AI_Admin::init();
 	}
 }, 5 );
 

@@ -22,6 +22,16 @@ class SEO {
 
 	public static function init() {
 		add_action( 'parse_request', [ __CLASS__, 'serve_sitemap' ], 0 );
+		foreach ( [ 'save_post', 'deleted_post', 'edited_term', 'delete_term' ] as $hook ) {
+			add_action( $hook, [ __CLASS__, 'flush_sitemaps' ] );
+		}
+		foreach ( [ 'added_post_meta', 'updated_post_meta', 'added_term_meta', 'updated_term_meta' ] as $hook ) {
+			add_action( $hook, static function ( $meta_id, $object_id, $key ) {
+				if ( OVML_META === $key ) {
+					self::flush_sitemaps();
+				}
+			}, 10, 3 );
+		}
 		if ( ! ovml_enabled() ) {
 			return;
 		}
@@ -161,9 +171,34 @@ class SEO {
 	}
 
 	/* ------------------------------------------------------------ sitemap -- */
+	/*
+	 * /ovml-sitemap.xml is an index of per-language sitemaps,
+	 * /ovml-sitemap-{lang}-{page}.xml, each capped at SITEMAP_PAGE URLs so
+	 * sites with many languages and products stay far below the 50,000-URL
+	 * limit. URL lists are cached and cleared whenever content or
+	 * translations change.
+	 */
+
+	const SITEMAP_PAGE = 1000;
 
 	public static function sitemap_url() {
 		return ovml_root() . self::SITEMAP_PATH;
+	}
+
+	public static function sitemap_page_url( $lang, $page ) {
+		return ovml_root() . '/ovml-sitemap-' . rawurlencode( $lang ) . '-' . (int) $page . '.xml';
+	}
+
+	/** [url, ...] of every per-language sitemap page that has content. */
+	public static function sitemap_pages() {
+		$pages = [];
+		foreach ( ovml_secondary_languages() as $lang ) {
+			$count = count( self::sitemap_urls( $lang ) );
+			for ( $page = 1; $page <= (int) ceil( $count / self::SITEMAP_PAGE ); $page++ ) {
+				$pages[] = self::sitemap_page_url( $lang, $page );
+			}
+		}
+		return $pages;
 	}
 
 	private static function is_noindex( $post_id ) {
@@ -171,54 +206,82 @@ class SEO {
 		return in_array( 'noindex', $rank_math, true ) || '1' === get_post_meta( $post_id, '_yoast_wpseo_meta-robots-noindex', true );
 	}
 
-	/** Every secondary-language URL with real content. */
-	public static function sitemap_urls() {
-		$urls  = [];
+	public static function flush_sitemaps() {
+		foreach ( array_keys( ovml_languages() ) as $lang ) {
+			delete_transient( 'ovml_sitemap_' . $lang );
+		}
+	}
+
+	/** Every URL in one language with real content (cached). */
+	public static function sitemap_urls( $lang ) {
+		$cached = get_transient( 'ovml_sitemap_' . $lang );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$urls  = [ ovml_url( ovml_root() . '/', $lang ) ];
 		$types = array_diff( (array) ovml_settings()['post_types'], (array) ovml_settings()['separate_posts'] );
 		$ids   = $types ? get_posts( [
 			'post_type'      => $types,
 			'post_status'    => 'publish',
 			'posts_per_page' => -1,
 			'fields'         => 'ids',
-			'meta_key'       => OVML_META, // phpcs:ignore WordPress.DB.SlowDBQuery -- sitemap, cached by crawlers
+			'meta_key'       => OVML_META, // phpcs:ignore WordPress.DB.SlowDBQuery -- cached
 		] ) : [];
+		$front = (int) get_option( 'page_on_front' );
+		foreach ( $ids as $id ) {
+			if ( $front !== (int) $id && null !== ovml_post_tr( $id, 'title', $lang ) && ! self::is_noindex( $id ) ) {
+				$urls[] = ovml_url( get_permalink( $id ), $lang );
+			}
+		}
 		$terms = get_terms( [ 'taxonomy' => ovml_translatable_taxonomies(), 'hide_empty' => true ] );
-
-		foreach ( ovml_secondary_languages() as $lang ) {
-			$urls[] = ovml_url( ovml_root() . '/', $lang );
-			foreach ( $ids as $id ) {
-				if ( ovml_has_tr( get_post( $id ), $lang ) && ! self::is_noindex( $id ) && (int) get_option( 'page_on_front' ) !== (int) $id ) {
-					$urls[] = ovml_url( get_permalink( $id ), $lang );
-				}
+		foreach ( is_array( $terms ) ? $terms : [] as $term ) {
+			if ( null !== ovml_term_tr( $term->term_id, 'name', $lang ) ) {
+				$urls[] = ovml_url( get_term_link( $term ), $lang );
 			}
-			foreach ( is_array( $terms ) ? $terms : [] as $term ) {
-				if ( ovml_has_tr( $term, $lang ) ) {
-					$urls[] = ovml_url( get_term_link( $term ), $lang );
-				}
-			}
-			foreach ( (array) ovml_settings()['separate_posts'] as $type ) {
-				foreach ( PolylangData::ids_in( $lang, $type ) as $id ) {
-					if ( $id ) {
-						$urls[] = get_permalink( $id );
-					}
+		}
+		foreach ( (array) ovml_settings()['separate_posts'] as $type ) {
+			foreach ( PolylangData::ids_in( $lang, $type ) as $id ) {
+				if ( $id ) {
+					$urls[] = get_permalink( $id );
 				}
 			}
 		}
-		return array_values( array_unique( (array) apply_filters( 'ovml_sitemap_urls', $urls ) ) );
+		$urls = array_values( array_unique( (array) apply_filters( 'ovml_sitemap_urls', $urls, $lang ) ) );
+		set_transient( 'ovml_sitemap_' . $lang, $urls, 12 * HOUR_IN_SECONDS );
+		return $urls;
 	}
 
 	public static function serve_sitemap() {
-		if ( self::SITEMAP_PATH !== strtok( $_SERVER['REQUEST_URI'] ?? '', '?' ) ) {
-			return;
+		$path = strtok( $_SERVER['REQUEST_URI'] ?? '', '?' );
+		$page = null;
+		if ( self::SITEMAP_PATH !== $path ) {
+			if ( ! preg_match( '#^/ovml-sitemap-([a-z]{2,3}(?:-[a-z]{2,4})?)-(\d+)\.xml$#', (string) $path, $m ) || ! in_array( $m[1], ovml_secondary_languages(), true ) ) {
+				return;
+			}
+			$page = [ $m[1], max( 1, (int) $m[2] ) ];
 		}
 		if ( ! self::setting( 'sitemap' ) || ! ovml_enabled() ) {
 			return;
 		}
-		status_header( 200 );
+		$urls = null;
+		if ( null !== $page ) {
+			[ $lang, $number ] = $page;
+			$urls = array_slice( self::sitemap_urls( $lang ), ( $number - 1 ) * self::SITEMAP_PAGE, self::SITEMAP_PAGE );
+		}
+		status_header( null !== $urls && ! $urls ? 404 : 200 ); // decided before any output
 		header( 'Content-Type: application/xml; charset=UTF-8' );
 		header( 'X-Robots-Tag: noindex, follow' );
-		echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-		foreach ( self::sitemap_urls() as $url ) {
+		echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+		if ( null === $page ) {
+			echo '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+			foreach ( self::sitemap_pages() as $url ) {
+				echo "\t<sitemap><loc>" . esc_url( $url ) . "</loc></sitemap>\n";
+			}
+			echo '</sitemapindex>';
+			exit;
+		}
+		echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+		foreach ( $urls as $url ) {
 			echo "\t<url><loc>" . esc_url( $url ) . "</loc></url>\n";
 		}
 		echo '</urlset>';

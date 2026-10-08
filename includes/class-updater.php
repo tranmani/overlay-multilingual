@@ -78,6 +78,12 @@ class Updater {
 		return $data;
 	}
 
+	/** Cached latest release without contacting GitHub (null if never checked or the check failed). */
+	public static function cached() {
+		$cached = get_site_transient( self::CACHE );
+		return is_array( $cached ) && ! empty( $cached['version'] ) ? $cached : null;
+	}
+
 	public static function has_update() {
 		$latest = self::latest();
 		return $latest && version_compare( $latest['version'], OVML_VERSION, '>' ) ? $latest : null;

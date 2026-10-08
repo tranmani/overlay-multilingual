@@ -25,6 +25,7 @@ class Admin {
 		add_action( 'wp_ajax_ovml_save_string', [ __CLASS__, 'ajax_save_string' ] );
 		add_action( 'wp_ajax_ovml_delete_string', [ __CLASS__, 'ajax_delete_string' ] );
 		add_action( 'wp_ajax_ovml_scan', [ __CLASS__, 'ajax_scan' ] );
+		add_action( 'wp_ajax_ovml_check_updates', [ __CLASS__, 'ajax_check_updates' ] );
 		add_filter( 'plugin_action_links_' . plugin_basename( OVML_FILE ), [ __CLASS__, 'action_links' ] );
 		add_filter( 'plugin_row_meta', [ __CLASS__, 'row_meta' ], 10, 2 );
 	}
@@ -72,6 +73,7 @@ class Admin {
 		wp_localize_script( 'ovml-admin', 'ovmlAdmin', [
 			'ajax'  => admin_url( 'admin-ajax.php' ),
 			'nonce' => wp_create_nonce( 'ovml_ajax' ),
+			'ai'    => \OverlayML\AI::configured(),
 			'i18n'  => [
 				'confirmLive'   => __( 'Go live? Every visitor will see the language switcher and the translated URLs.', 'overlay-multilingual' ),
 				'confirmDelete' => __( 'Delete this phrase and its translations?', 'overlay-multilingual' ),
@@ -79,6 +81,15 @@ class Admin {
 				'scanDone'      => __( 'Scan complete: %d new phrases found. Reloading…', 'overlay-multilingual' ),
 				'copied'        => __( 'Copied', 'overlay-multilingual' ),
 				'error'         => __( 'Could not save. Check your connection and try again.', 'overlay-multilingual' ),
+				'aiTesting'     => __( 'Testing…', 'overlay-multilingual' ),
+				'checking'      => __( 'Checking…', 'overlay-multilingual' ),
+				'aiStrings'     => __( 'Translating phrases into %1$s… %2$d left', 'overlay-multilingual' ),
+				'aiItems'       => __( 'Translating into %1$s: %2$d of %3$d', 'overlay-multilingual' ),
+				'aiDone'        => __( 'AI translation finished. Reloading…', 'overlay-multilingual' ),
+				'aiNothing'     => __( 'Nothing left to translate.', 'overlay-multilingual' ),
+				'aiWorking'     => __( 'Translating…', 'overlay-multilingual' ),
+				'aiFailed'      => __( 'Some items could not be translated: %s', 'overlay-multilingual' ),
+				'aiConfirm'     => __( 'Translate every missing item with AI? This uses your API credits.', 'overlay-multilingual' ),
 			],
 		] );
 	}
@@ -94,6 +105,7 @@ class Admin {
 			'languages' => __( 'Languages', 'overlay-multilingual' ),
 			'strings'   => __( 'Strings', 'overlay-multilingual' ),
 			'content'   => __( 'Content', 'overlay-multilingual' ),
+			'ai'        => __( 'AI translation', 'overlay-multilingual' ),
 			'settings'  => __( 'Settings', 'overlay-multilingual' ),
 			'about'     => __( 'About', 'overlay-multilingual' ),
 		];
@@ -153,21 +165,26 @@ class Admin {
 		$post_meta = $posts ? $wpdb->get_results( "SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = '" . esc_sql( OVML_META ) . "' AND post_id IN (" . implode( ',', array_map( 'intval', $posts ) ) . ')', OBJECT_K ) : [];
 		$term_meta = $terms ? $wpdb->get_results( "SELECT term_id, meta_value FROM {$wpdb->termmeta} WHERE meta_key = '" . esc_sql( OVML_META ) . "' AND term_id IN (" . implode( ',', array_map( 'intval', $terms ) ) . ')', OBJECT_K ) : [];
 
+		// Decode each item once and tally every language in a single pass.
+		$langs = ovml_secondary_languages();
+		$done  = array_fill_keys( $langs, [ 'p' => 0, 't' => 0 ] );
+		foreach ( $post_meta as $row ) {
+			$tr = maybe_unserialize( $row->meta_value );
+			foreach ( $langs as $lang ) {
+				$done[ $lang ]['p'] += ! empty( $tr[ $lang ]['title'] ) ? 1 : 0;
+			}
+		}
+		foreach ( $term_meta as $row ) {
+			$tr = maybe_unserialize( $row->meta_value );
+			foreach ( $langs as $lang ) {
+				$done[ $lang ]['t'] += ! empty( $tr[ $lang ]['name'] ) ? 1 : 0;
+			}
+		}
 		$out = [];
-		foreach ( ovml_secondary_languages() as $lang ) {
-			$p = 0;
-			foreach ( $post_meta as $row ) {
-				$tr = maybe_unserialize( $row->meta_value );
-				$p += ! empty( $tr[ $lang ]['title'] ) ? 1 : 0;
-			}
-			$t = 0;
-			foreach ( $term_meta as $row ) {
-				$tr = maybe_unserialize( $row->meta_value );
-				$t += ! empty( $tr[ $lang ]['name'] ) ? 1 : 0;
-			}
-			$dict = Dictionary::get( $lang );
-			$s    = count( array_filter( $strings, static fn( $k ) => isset( $dict[ $k ] ) && '' !== $dict[ $k ] ) );
-			$out[ $lang ] = [ $p, count( $posts ), $t, count( $terms ), $s, count( $strings ) ];
+		foreach ( $langs as $lang ) {
+			$dict         = Dictionary::get( $lang );
+			$translated   = count( array_filter( $strings, static fn( $k ) => isset( $dict[ $k ] ) && '' !== $dict[ $k ] ) );
+			$out[ $lang ] = [ $done[ $lang ]['p'], count( $posts ), $done[ $lang ]['t'], count( $terms ), $translated, count( $strings ) ];
 		}
 		return $out;
 	}
@@ -294,26 +311,15 @@ class Admin {
 		</div>
 
 		<?php if ( ! empty( $s['advanced']['updates'] ) ) : ?>
-			<?php $update = \OverlayML\Updater::has_update(); $latest = \OverlayML\Updater::latest(); ?>
-			<div class="ovml-card ovml-card-row">
+			<?php $known = \OverlayML\Updater::cached(); // never call GitHub while rendering ?>
+			<div class="ovml-card ovml-card-row" data-ovml-updates data-checked="<?php echo $known ? '1' : '0'; ?>">
 				<div>
 					<h2><?php esc_html_e( 'Updates', 'overlay-multilingual' ); ?></h2>
-					<p class="ovml-hint" style="margin:0">
-						<?php
-						printf( /* translators: %s: version */ esc_html__( 'Installed: %s', 'overlay-multilingual' ), esc_html( OVML_VERSION ) );
-						echo ' · ';
-						echo $latest ? sprintf( /* translators: %s: version */ esc_html__( 'Latest release: %s', 'overlay-multilingual' ), esc_html( $latest['version'] ) ) : esc_html__( 'Latest release: not checked yet', 'overlay-multilingual' );
-						?>
-						<?php if ( $latest ) : ?> · <a href="<?php echo esc_url( $latest['url'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Release notes', 'overlay-multilingual' ); ?></a><?php endif; ?>
-					</p>
+					<p class="ovml-hint" style="margin:0" data-ovml-update-text><?php echo wp_kses_post( self::update_text( $known ) ); ?></p>
 				</div>
-				<div style="display:flex;gap:8px">
-					<form method="post"><?php wp_nonce_field( 'ovml_save', 'ovml_nonce' ); ?><input type="hidden" name="ovml_action" value="check_updates"><button class="button"><?php esc_html_e( 'Check for updates', 'overlay-multilingual' ); ?></button></form>
-					<?php if ( $update && current_user_can( 'update_plugins' ) ) : ?>
-						<a class="button button-primary" href="<?php echo esc_url( \OverlayML\Updater::update_url() ); ?>"><?php printf( /* translators: %s: version */ esc_html__( 'Update to %s', 'overlay-multilingual' ), esc_html( $update['version'] ) ); ?></a>
-					<?php else : ?>
-						<span class="ovml-pill ovml-pill--ok" style="align-self:center"><?php esc_html_e( 'Up to date', 'overlay-multilingual' ); ?></span>
-					<?php endif; ?>
+				<div style="display:flex;gap:8px;align-items:center">
+					<button type="button" class="button" data-ovml-check-updates><?php esc_html_e( 'Check for updates', 'overlay-multilingual' ); ?></button>
+					<span data-ovml-update-action><?php echo wp_kses_post( self::update_action( $known ) ); ?></span>
 				</div>
 			</div>
 		<?php endif; ?>
@@ -324,7 +330,7 @@ class Admin {
 
 	public static function tab_languages() {
 		$s         = ovml_settings();
-		$installed = array_merge( [ 'en_US' ], get_available_languages() );
+		$locales   = self::wp_locales();
 		$rows      = $s['languages'];
 		$rows['']  = [ 'locale' => '', 'name' => '', 'og_locale' => '', 'replace' => [] ]; // empty row to add one
 		?>
@@ -350,7 +356,7 @@ class Admin {
 					$replace[] = "$from=$to";
 				}
 				$new  = '' === $code;
-				$pack = $new || in_array( $l['locale'], $installed, true );
+				$pack = $new ? null : self::pack_status( $l['locale'] );
 				$hint = static fn( $text ) => $new ? ' placeholder="' . esc_attr( $text ) . '"' : '';
 				?>
 				<div class="ovml-lang-row"<?php echo $new ? ' data-ovml-new-lang hidden' : ''; ?>>
@@ -358,8 +364,14 @@ class Admin {
 					<input type="text" name="lang[<?php echo (int) $i; ?>][name]" value="<?php echo esc_attr( $l['name'] ); ?>"<?php echo $hint( __( 'e.g. Italiano', 'overlay-multilingual' ) ); // phpcs:ignore WordPress.Security.EscapeOutput ?> aria-label="<?php esc_attr_e( 'Name', 'overlay-multilingual' ); ?>">
 					<div>
 						<input type="text" name="lang[<?php echo (int) $i; ?>][locale]" value="<?php echo esc_attr( $l['locale'] ); ?>"<?php echo $hint( 'it_IT' ); // phpcs:ignore WordPress.Security.EscapeOutput ?> list="ovml-locales" aria-label="<?php esc_attr_e( 'WordPress locale', 'overlay-multilingual' ); ?>" style="width:100%">
-						<?php if ( ! $pack ) : ?>
-							<button class="button-link" name="install_pack" value="<?php echo esc_attr( $l['locale'] ); ?>"><?php esc_html_e( 'Install language pack', 'overlay-multilingual' ); ?></button>
+						<?php if ( $pack && null !== $pack['packs'] ) : ?>
+							<span class="description" style="display:block;margin-top:4px">
+								<?php if ( $pack['core'] ) : ?>
+									<?php /* translators: %d: number of plugin and theme translation files */ echo esc_html( sprintf( _n( '✓ WordPress · %d plugin/theme translation', '✓ WordPress · %d plugin/theme translations', $pack['packs'], 'overlay-multilingual' ), $pack['packs'] ) ); ?>
+								<?php else : ?>
+									<span style="color:#9a6700"><?php esc_html_e( 'Language pack not installed', 'overlay-multilingual' ); ?></span>
+								<?php endif; ?>
+							</span>
 						<?php endif; ?>
 					</div>
 					<input type="text" name="lang[<?php echo (int) $i; ?>][og_locale]" value="<?php echo esc_attr( $l['og_locale'] ?? '' ); ?>"<?php echo $hint( 'it_IT' ); // phpcs:ignore WordPress.Security.EscapeOutput ?> aria-label="<?php esc_attr_e( 'Social locale', 'overlay-multilingual' ); ?>">
@@ -371,9 +383,14 @@ class Admin {
 			endforeach;
 			?>
 			<button type="button" class="button ovml-add-lang" data-ovml-add-lang>+ <?php esc_html_e( 'Add language', 'overlay-multilingual' ); ?></button>
-			<datalist id="ovml-locales"><?php foreach ( $installed as $locale ) : ?><option value="<?php echo esc_attr( $locale ); ?>"><?php endforeach; ?></datalist>
+			<datalist id="ovml-locales"><?php foreach ( $locales as $locale => $names ) : ?><option value="<?php echo esc_attr( $locale ); ?>"><?php echo esc_html( $names[0] . ' — ' . $names[1] ); ?></option><?php endforeach; ?></datalist>
+			<script type="application/json" id="ovml-locale-names"><?php echo wp_json_encode( array_map( static fn( $n ) => $n[1], $locales ), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE ); ?></script>
 			<p class="description" style="margin-top:14px"><?php esc_html_e( 'Replace characters: one pair per line, e.g. ß=ss for Swiss German. Applied to all translated text in that language.', 'overlay-multilingual' ); ?></p>
-			<div class="ovml-actions"><button class="button button-primary"><?php esc_html_e( 'Save languages', 'overlay-multilingual' ); ?></button></div>
+			<p class="description"><?php esc_html_e( 'WordPress, WooCommerce and plugin/theme text is translated by official language packs, downloaded automatically when you add a language. You only translate your own content and the phrases the scanner finds.', 'overlay-multilingual' ); ?></p>
+			<div class="ovml-actions">
+				<button class="button button-primary"><?php esc_html_e( 'Save languages', 'overlay-multilingual' ); ?></button>
+				<button class="button" name="install_packs" value="1"><?php esc_html_e( 'Install / update language packs', 'overlay-multilingual' ); ?></button>
+			</div>
 		</form>
 		<?php
 	}
@@ -405,6 +422,19 @@ class Admin {
 		$total = count( $keys );
 		$paged = max( 1, (int) ( $_GET['paged'] ?? 1 ) ); // phpcs:ignore WordPress.Security.NonceVerification
 		$slice = array_slice( $keys, ( $paged - 1 ) * $per, $per );
+
+		// Columns: every language when there are few; with many, one at a time
+		// (the filtered language, or the one picked in "Translate into").
+		$to = isset( $_GET['to'] ) ? sanitize_key( $_GET['to'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		if ( in_array( $to, $langs, true ) ) {
+			$columns = [ $to ];
+		} elseif ( 'all' === $to || count( $langs ) <= 3 ) {
+			$columns = $langs;
+		} else {
+			$columns = [ isset( $dicts[ $filter ] ) ? $filter : ( $langs[0] ?? '' ) ];
+			$to      = $columns[0];
+		}
+		$columns = array_values( array_filter( $columns ) );
 		?>
 		<div class="ovml-toolbar">
 			<form method="get" style="display:flex;gap:8px;align-items:center">
@@ -417,9 +447,20 @@ class Admin {
 						<option value="<?php echo esc_attr( $lang ); ?>" <?php selected( $filter, $lang ); ?>><?php echo esc_html( sprintf( /* translators: %s: language name */ __( 'Untranslated in %s', 'overlay-multilingual' ), ovml_languages()[ $lang ]['name'] ) ); ?></option>
 					<?php endforeach; ?>
 				</select>
+				<?php if ( count( $langs ) > 3 ) : ?>
+					<select name="to" onchange="this.form.submit()" aria-label="<?php esc_attr_e( 'Translate into', 'overlay-multilingual' ); ?>">
+						<?php foreach ( $langs as $lang ) : ?>
+							<option value="<?php echo esc_attr( $lang ); ?>" <?php selected( $to, $lang ); ?>><?php echo esc_html( sprintf( /* translators: %s: language name */ __( 'Translate into %s', 'overlay-multilingual' ), ovml_languages()[ $lang ]['name'] ) ); ?></option>
+						<?php endforeach; ?>
+						<option value="all" <?php selected( $to, 'all' ); ?>><?php esc_html_e( 'Show all languages', 'overlay-multilingual' ); ?></option>
+					</select>
+				<?php endif; ?>
 				<button class="button"><?php esc_html_e( 'Filter', 'overlay-multilingual' ); ?></button>
 			</form>
 			<span class="spacer"></span>
+			<?php if ( $langs && $columns && \OverlayML\AI::configured() ) : ?>
+				<button type="button" class="button button-primary" data-ovml-ai-strings data-langs="<?php echo esc_attr( implode( ',', $columns ) ); ?>"><?php esc_html_e( 'Translate missing with AI', 'overlay-multilingual' ); ?></button>
+			<?php endif; ?>
 			<button type="button" class="button" data-ovml-scan <?php disabled( ! $langs ); ?>><?php esc_html_e( 'Scan site for text', 'overlay-multilingual' ); ?></button>
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ovml_export_strings' ), 'ovml_export' ) ); ?>"><?php esc_html_e( 'Export', 'overlay-multilingual' ); ?></a>
 			<form method="post" enctype="multipart/form-data" style="display:inline-flex;gap:6px">
@@ -429,6 +470,7 @@ class Admin {
 			</form>
 		</div>
 		<div class="ovml-card ovml-scan" data-ovml-scan-status><span></span><div class="ovml-progress"><span style="width:0"></span></div></div>
+		<div class="ovml-card ovml-scan" data-ovml-ai-status><span></span><div class="ovml-progress"><span style="width:0"></span></div></div>
 
 		<?php if ( ! $langs ) : ?>
 			<div class="ovml-card ovml-empty"><strong><?php esc_html_e( 'No languages to translate into yet', 'overlay-multilingual' ); ?></strong><a class="button" href="<?php echo esc_url( self::url( 'languages' ) ); ?>"><?php esc_html_e( 'Add a language', 'overlay-multilingual' ); ?></a></div>
@@ -441,14 +483,14 @@ class Admin {
 			<table class="ovml-table">
 				<thead><tr>
 					<th style="width:34%"><?php echo esc_html( ovml_languages()[ ovml_default_language() ]['name'] ); ?></th>
-					<?php foreach ( $langs as $lang ) : ?><th><?php echo esc_html( ovml_languages()[ $lang ]['name'] ); ?></th><?php endforeach; ?>
+					<?php foreach ( $columns as $lang ) : ?><th><?php echo esc_html( ovml_languages()[ $lang ]['name'] ); ?></th><?php endforeach; ?>
 					<th style="width:40px"><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'overlay-multilingual' ); ?></span></th>
 				</tr></thead>
 				<tbody>
 				<?php foreach ( $slice as $key ) : ?>
 					<tr data-source="<?php echo esc_attr( $key ); ?>">
 						<td class="ovml-source"><?php echo esc_html( $key ); ?></td>
-						<?php foreach ( $langs as $lang ) : ?>
+						<?php foreach ( $columns as $lang ) : ?>
 							<td><input type="text" class="ovml-string-input" data-lang="<?php echo esc_attr( $lang ); ?>" value="<?php echo esc_attr( $dicts[ $lang ][ $key ] ?? '' ); ?>" lang="<?php echo esc_attr( $lang ); ?>" aria-label="<?php echo esc_attr( ovml_languages()[ $lang ]['name'] ); ?>"></td>
 						<?php endforeach; ?>
 						<td class="row-actions-ovml"><button type="button" class="button-link button-link-delete" data-ovml-delete aria-label="<?php esc_attr_e( 'Delete phrase', 'overlay-multilingual' ); ?>">&times;</button></td>
@@ -537,19 +579,38 @@ class Admin {
 			</form>
 			<span class="spacer"></span>
 			<span class="ovml-sub" style="margin:0"><?php echo esc_html( sprintf( /* translators: %d: number of items */ _n( '%d item', '%d items', $total, 'overlay-multilingual' ), $total ) ); ?></span>
+			<?php if ( \OverlayML\AI::configured() ) : ?>
+				<button type="button" class="button button-primary" data-ovml-ai-content data-source="<?php echo esc_attr( $current ); ?>" data-langs="<?php echo esc_attr( isset( array_flip( $langs )[ $missing ] ) ? $missing : implode( ',', $langs ) ); ?>"><?php esc_html_e( 'Translate missing with AI', 'overlay-multilingual' ); ?></button>
+			<?php endif; ?>
 		</div>
+		<div class="ovml-card ovml-scan" data-ovml-ai-status><span></span><div class="ovml-progress"><span style="width:0"></span></div></div>
 		<?php if ( ! $rows ) : ?>
 			<div class="ovml-card ovml-empty"><strong><?php esc_html_e( 'All caught up', 'overlay-multilingual' ); ?></strong></div>
 		<?php else : ?>
 			<table class="ovml-table">
-				<thead><tr><th><?php esc_html_e( 'Title', 'overlay-multilingual' ); ?></th><?php foreach ( $langs as $lang ) : ?><th style="width:140px"><?php echo esc_html( ovml_languages()[ $lang ]['name'] ); ?></th><?php endforeach; ?></tr></thead>
+				<?php $compact = count( $langs ) > 4; ?>
+				<thead><tr><th><?php esc_html_e( 'Title', 'overlay-multilingual' ); ?></th>
+					<?php if ( $compact ) : ?>
+						<th><?php esc_html_e( 'Languages', 'overlay-multilingual' ); ?></th>
+					<?php else : ?>
+						<?php foreach ( $langs as $lang ) : ?><th style="width:140px"><?php echo esc_html( ovml_languages()[ $lang ]['name'] ); ?></th><?php endforeach; ?>
+					<?php endif; ?>
+				</tr></thead>
 				<tbody>
 				<?php foreach ( $rows as $row ) : ?>
 					<tr>
 						<td><a href="<?php echo esc_url( $row['edit'] ); ?>"><strong><?php echo esc_html( $row['title'] ); ?></strong></a><?php echo $row['status'] && 'publish' !== $row['status'] ? ' <span class="ovml-pill ovml-pill--off">' . esc_html( $row['status'] ) . '</span>' : ''; ?></td>
-						<?php foreach ( $langs as $lang ) : ?>
-							<td><?php echo $row['done'][ $lang ] ? '<span class="ovml-pill ovml-pill--ok">' . esc_html__( 'Translated', 'overlay-multilingual' ) . '</span>' : '<span class="ovml-pill ovml-pill--warn">' . esc_html__( 'Missing', 'overlay-multilingual' ) . '</span>'; ?></td>
-						<?php endforeach; ?>
+						<?php if ( $compact ) : ?>
+							<td><span class="ovml-chips">
+								<?php foreach ( $langs as $lang ) : ?>
+									<span class="ovml-chip <?php echo $row['done'][ $lang ] ? 'is-done' : 'is-missing'; ?>" title="<?php echo esc_attr( ovml_languages()[ $lang ]['name'] . ': ' . ( $row['done'][ $lang ] ? __( 'translated', 'overlay-multilingual' ) : __( 'missing', 'overlay-multilingual' ) ) ); ?>"><?php echo esc_html( strtoupper( $lang ) ); ?></span>
+								<?php endforeach; ?>
+							</span></td>
+						<?php else : ?>
+							<?php foreach ( $langs as $lang ) : ?>
+								<td><?php echo $row['done'][ $lang ] ? '<span class="ovml-pill ovml-pill--ok">' . esc_html__( 'Translated', 'overlay-multilingual' ) . '</span>' : '<span class="ovml-pill ovml-pill--warn">' . esc_html__( 'Missing', 'overlay-multilingual' ) . '</span>'; ?></td>
+							<?php endforeach; ?>
+						<?php endif; ?>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>
@@ -733,6 +794,132 @@ class Admin {
 		<?php
 	}
 
+	/* ----------------------------------------------------- language packs -- */
+
+	/** WordPress.org locale list (cached by WordPress), [locale => [english_name, native_name]]. */
+	private static function wp_locales() {
+		require_once ABSPATH . 'wp-admin/includes/translation-install.php';
+		$list = wp_get_available_translations();
+		$out  = [ 'en_US' => [ 'English (United States)', 'English' ] ];
+		foreach ( is_array( $list ) ? $list : [] as $locale => $info ) {
+			$out[ $locale ] = [ $info['english_name'] ?? $locale, $info['native_name'] ?? $locale ];
+		}
+		return $out;
+	}
+
+	/** Installed translation files for a locale: [core => bool, packs => plugin + theme count]. */
+	private static function pack_status( $locale ) {
+		if ( 'en_US' === $locale ) {
+			return [ 'core' => true, 'packs' => null ];
+		}
+		$core  = in_array( $locale, get_available_languages(), true );
+		$packs = count( (array) glob( WP_LANG_DIR . '/plugins/*-' . $locale . '.mo' ) ) + count( (array) glob( WP_LANG_DIR . '/themes/*-' . $locale . '.mo' ) );
+		return [ 'core' => $core, 'packs' => $packs ];
+	}
+
+	/**
+	 * Download WordPress core packs for the given locales, then every available
+	 * plugin and theme translation for them — so core, WooCommerce and theme
+	 * text is translated without anyone typing it in.
+	 *
+	 * @return array{core:int, packs:int, errors:string[]}
+	 */
+	public static function install_language_packs( array $locales ) {
+		require_once ABSPATH . 'wp-admin/includes/translation-install.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		$report  = [ 'core' => 0, 'packs' => 0, 'errors' => [] ];
+		$locales = array_values( array_diff( array_unique( $locales ), [ 'en_US', '' ] ) );
+		if ( ! $locales ) {
+			return $report;
+		}
+		if ( ! wp_can_install_language_pack() ) {
+			$report['errors'][] = __( 'WordPress cannot write language files on this server (file permissions).', 'overlay-multilingual' );
+			return $report;
+		}
+		foreach ( $locales as $locale ) {
+			if ( ! in_array( $locale, get_available_languages(), true ) ) {
+				if ( wp_download_language_pack( $locale ) ) {
+					++$report['core'];
+				} else {
+					/* translators: %s: locale */
+					$report['errors'][] = sprintf( __( 'No WordPress language pack exists for %s.', 'overlay-multilingual' ), $locale );
+				}
+			}
+		}
+		// WordPress only offers plugin/theme translations for installed locales; ask again now.
+		delete_site_transient( 'update_plugins' );
+		delete_site_transient( 'update_themes' );
+		delete_site_transient( 'update_core' );
+		wp_update_plugins();
+		wp_update_themes();
+		$updates = array_values( array_filter( wp_get_translation_updates(), static fn( $u ) => in_array( $u->language, $locales, true ) ) );
+		if ( $updates ) {
+			$upgrader = new \Language_Pack_Upgrader( new \Automatic_Upgrader_Skin() );
+			$results  = $upgrader->bulk_upgrade( $updates );
+			$report['packs'] = is_array( $results ) ? count( array_filter( $results, static fn( $r ) => ! is_wp_error( $r ) && $r ) ) : 0;
+		}
+		return $report;
+	}
+
+	private static function pack_message( array $report ) {
+		$message = sprintf(
+			/* translators: 1: number of core language packs, 2: number of plugin/theme translations */
+			__( 'Language packs: %1$d WordPress, %2$d plugin and theme translations installed or updated.', 'overlay-multilingual' ),
+			$report['core'],
+			$report['packs']
+		);
+		return $report['errors'] ? $message . ' ' . implode( ' ', $report['errors'] ) : $message;
+	}
+
+	/* ------------------------------------------------------------ updates -- */
+
+	/** "Installed: x · Latest release: y · Release notes" for the Updates card. */
+	private static function update_text( $latest ) {
+		/* translators: %s: version */
+		$text = sprintf( esc_html__( 'Installed: %s', 'overlay-multilingual' ), esc_html( OVML_VERSION ) ) . ' · ';
+		if ( ! $latest ) {
+			return $text . esc_html__( 'Latest release: not checked yet', 'overlay-multilingual' );
+		}
+		/* translators: %s: version */
+		$text .= sprintf( esc_html__( 'Latest release: %s', 'overlay-multilingual' ), esc_html( $latest['version'] ) );
+		return $text . ' · <a href="' . esc_url( $latest['url'] ) . '" target="_blank" rel="noopener">' . esc_html__( 'Release notes', 'overlay-multilingual' ) . '</a>';
+	}
+
+	/** Update button, "Up to date" pill, or nothing when no check has run yet. */
+	private static function update_action( $latest ) {
+		if ( ! $latest ) {
+			return '';
+		}
+		if ( version_compare( $latest['version'], OVML_VERSION, '>' ) ) {
+			if ( ! current_user_can( 'update_plugins' ) ) {
+				return '<span class="ovml-pill ovml-pill--warn">' . esc_html__( 'Update available', 'overlay-multilingual' ) . '</span>';
+			}
+			/* translators: %s: version */
+			return '<a class="button button-primary" href="' . esc_url( \OverlayML\Updater::update_url() ) . '">' . sprintf( esc_html__( 'Update to %s', 'overlay-multilingual' ), esc_html( $latest['version'] ) ) . '</a>';
+		}
+		return '<span class="ovml-pill ovml-pill--ok">' . esc_html__( 'Up to date', 'overlay-multilingual' ) . '</span>';
+	}
+
+	public static function ajax_check_updates() {
+		if ( ! current_user_can( self::CAP ) || ! check_ajax_referer( 'ovml_ajax', false, false ) ) {
+			wp_send_json_error( null, 403 );
+		}
+		$latest = \OverlayML\Updater::latest( true );
+		if ( ! $latest ) {
+			wp_send_json_error( [ 'message' => __( 'Could not reach GitHub. Try again later.', 'overlay-multilingual' ) ] );
+		}
+		// Refresh WordPress's own update data so Dashboard → Updates agrees.
+		delete_site_transient( 'update_plugins' );
+		wp_update_plugins();
+		wp_send_json_success( [ 'text' => self::update_text( $latest ), 'action' => self::update_action( $latest ) ] );
+	}
+
+	public static function tab_ai() {
+		AI_Admin::render();
+	}
+
 	/* -------------------------------------------------------------- about -- */
 
 	private static function repo_url( $path = '' ) {
@@ -851,13 +1038,6 @@ class Admin {
 				self::flash( __( 'New preview link created. The old one no longer works.', 'overlay-multilingual' ) );
 				break;
 
-			case 'check_updates':
-				delete_site_transient( 'update_plugins' );
-				$latest = \OverlayML\Updater::latest( true );
-				wp_update_plugins();
-				self::flash( $latest ? sprintf( /* translators: %s: version */ __( 'Latest release: %s.', 'overlay-multilingual' ), $latest['version'] ) : __( 'Could not reach GitHub. Try again later.', 'overlay-multilingual' ), $latest ? 'success' : 'error' );
-				break;
-
 			case 'install_early':
 				$installed = ovml_install_early_loader();
 				self::flash( $installed ? __( 'Early loading installed.', 'overlay-multilingual' ) : __( 'Could not write to the must-use plugins folder. Check its permissions.', 'overlay-multilingual' ), $installed ? 'success' : 'error' );
@@ -883,12 +1063,6 @@ class Admin {
 	}
 
 	private static function save_languages() {
-		if ( ! empty( $_POST['install_pack'] ) ) {
-			require_once ABSPATH . 'wp-admin/includes/translation-install.php';
-			$locale = sanitize_text_field( wp_unslash( $_POST['install_pack'] ) );
-			$ok     = wp_can_install_language_pack() && wp_download_language_pack( $locale );
-			self::flash( $ok ? sprintf( /* translators: %s: locale */ __( 'Language pack %s installed.', 'overlay-multilingual' ), $locale ) : __( 'The language pack could not be installed automatically. Install it from Settings → General.', 'overlay-multilingual' ), $ok ? 'success' : 'error' );
-		}
 		$rows    = (array) wp_unslash( $_POST['lang'] ?? [] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitised per field below
 		$default = (int) ( $_POST['default'] ?? -1 );
 		$langs   = [];
@@ -925,9 +1099,15 @@ class Admin {
 		$default_code = $default_code ?: array_key_first( $langs );
 		$langs        = [ $default_code => $langs[ $default_code ] ] + $langs; // default first
 		self::update( [ 'languages' => $langs, 'default_language' => $default_code ] );
-		if ( empty( $_POST['install_pack'] ) ) {
-			self::flash( __( 'Languages saved.', 'overlay-multilingual' ) );
+		// Language packs: all of them on request, otherwise only for newly added locales.
+		$wanted = array_column( $langs, 'locale' );
+		$todo   = ! empty( $_POST['install_packs'] ) ? $wanted : array_values( array_diff( $wanted, get_available_languages(), [ 'en_US' ] ) );
+		if ( $todo ) {
+			$report = self::install_language_packs( $todo );
+			self::flash( __( 'Languages saved.', 'overlay-multilingual' ) . ' ' . self::pack_message( $report ), $report['errors'] ? 'warning' : 'success' );
+			return;
 		}
+		self::flash( __( 'Languages saved.', 'overlay-multilingual' ) );
 	}
 
 	private static function save_settings() {

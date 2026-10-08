@@ -57,27 +57,41 @@ class Editor {
 	 * @param array $values   [lang => [field => value]]
 	 * @param array $original [field => original-language value] for "Copy original"
 	 */
-	private static function panel( $fields, $values, $original, $id_prefix ) {
+	private static function panel( $fields, $values, $original, $id_prefix, $object_type = 'post', $object_id = 0 ) {
 		$langs  = ovml_secondary_languages();
+		$many   = count( $langs ) > 6; // tabs show language codes instead of names
 		$labels = self::labels();
 		$main   = in_array( 'title', array_keys( $fields ), true ) ? 'title' : 'name';
 		echo '<div class="ovml ovml-editor" data-ovml-tabs style="margin:0;max-width:none">';
+		printf( '<script type="application/json" id="%s-originals">%s</script>', esc_attr( $id_prefix ), wp_json_encode( array_map( 'strval', array_filter( $original, 'strlen' ) ), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- JSON with HTML-significant characters hex-escaped
 		echo '<div class="ovml-editor__tabs" role="tablist">';
 		foreach ( $langs as $i => $lang ) {
 			$done = ! empty( $values[ $lang ][ $main ] );
 			printf(
-				'<button type="button" role="tab" id="%1$s-tab-%2$s" aria-controls="%1$s-panel-%2$s" aria-selected="%3$s">%4$s <span class="ovml-pill ovml-pill--%5$s" data-ovml-tab-status>%6$s</span></button>',
+				'<button type="button" role="tab" id="%1$s-tab-%2$s" aria-controls="%1$s-panel-%2$s" aria-selected="%3$s" title="%7$s">%4$s <span class="ovml-pill ovml-pill--%5$s" data-ovml-tab-status>%6$s</span></button>',
 				esc_attr( $id_prefix ),
 				esc_attr( $lang ),
 				0 === $i ? 'true' : 'false',
-				esc_html( ovml_languages()[ $lang ]['name'] ),
+				esc_html( $many ? strtoupper( $lang ) : ovml_languages()[ $lang ]['name'] ),
 				$done ? 'ok' : 'warn',
-				$done ? esc_html__( 'Translated', 'overlay-multilingual' ) : esc_html__( 'Missing', 'overlay-multilingual' )
+				$many ? ( $done ? '✓' : '•' ) : ( $done ? esc_html__( 'Translated', 'overlay-multilingual' ) : esc_html__( 'Missing', 'overlay-multilingual' ) ),
+				esc_attr( ovml_languages()[ $lang ]['name'] )
 			);
 		}
 		echo '</div>';
 		foreach ( $langs as $i => $lang ) {
 			printf( '<div class="ovml-editor__panel" role="tabpanel" id="%1$s-panel-%2$s" aria-labelledby="%1$s-tab-%2$s" lang="%2$s"%3$s>', esc_attr( $id_prefix ), esc_attr( $lang ), 0 === $i ? '' : ' hidden' );
+			if ( $object_id && \OverlayML\AI::configured() ) {
+				printf(
+					'<p class="ovml-ai-row"><button type="button" class="button" data-ovml-ai-fill data-type="%s" data-id="%d" data-lang="%s" data-prefix="%s">%s</button> <span class="ovml-hint" data-ovml-ai-fill-status></span></p>',
+					esc_attr( $object_type ),
+					(int) $object_id,
+					esc_attr( $lang ),
+					esc_attr( $id_prefix ),
+					/* translators: %s: language name */
+					esc_html( sprintf( __( 'Translate into %s with AI', 'overlay-multilingual' ), ovml_languages()[ $lang ]['name'] ) )
+				);
+			}
 			foreach ( $fields as $field => $cfg ) {
 				$id    = "$id_prefix-$lang-$field";
 				$name  = "ovml[$lang][$field]";
@@ -89,7 +103,7 @@ class Editor {
 					printf( '<span class="ovml-count" data-ovml-count-for="%s" data-max="%d"></span> ', esc_attr( $id ), (int) $cfg['max'] );
 				}
 				if ( '' !== (string) ( $original[ $field ] ?? '' ) ) {
-					printf( '<button type="button" class="button-link" data-ovml-fill="%s" data-source="%s">%s</button>', esc_attr( $id ), esc_attr( $original[ $field ] ), esc_html__( 'Copy original', 'overlay-multilingual' ) );
+					printf( '<button type="button" class="button-link" data-ovml-fill="%s" data-field="%s" data-originals="%s-originals">%s</button>', esc_attr( $id ), esc_attr( $field ), esc_attr( $id_prefix ), esc_html__( 'Copy original', 'overlay-multilingual' ) );
 				}
 				echo '</span></div>';
 				if ( 'text' === $cfg['type'] ) {
@@ -149,7 +163,7 @@ class Editor {
 			'seo_title' => false === strpos( $seo_title, '%' ) ? $seo_title : '',
 			'seo_desc'  => false === strpos( $seo_desc, '%' ) ? $seo_desc : '',
 		];
-		self::panel( $fields, (array) get_post_meta( $post->ID, OVML_META, true ), $original, 'ovml-post' );
+		self::panel( $fields, (array) get_post_meta( $post->ID, OVML_META, true ), $original, 'ovml-post', 'post', $post->ID );
 	}
 
 	public static function language_box( $post ) {
@@ -211,7 +225,7 @@ class Editor {
 		}
 		wp_nonce_field( 'ovml_term', 'ovml_term_nonce' );
 		echo '<div class="postbox ovml-term-panel" style="margin-top:24px"><div class="postbox-header"><h2 style="padding:0 12px">' . esc_html__( 'Translations', 'overlay-multilingual' ) . '</h2></div><div class="inside">';
-		self::panel( self::TERM_FIELDS, (array) get_term_meta( $term->term_id, OVML_META, true ), [ 'name' => $term->name, 'description' => $term->description ], 'ovml-term' );
+		self::panel( self::TERM_FIELDS, (array) get_term_meta( $term->term_id, OVML_META, true ), [ 'name' => $term->name, 'description' => $term->description ], 'ovml-term', 'term', $term->term_id );
 		echo '</div></div>';
 	}
 

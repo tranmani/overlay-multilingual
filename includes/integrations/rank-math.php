@@ -42,7 +42,9 @@ class RankMath {
 
 	public static function sitemap_index( $xml ) {
 		if ( 'live' === ovml_settings()['status'] && ! empty( ovml_settings()['seo']['sitemap'] ) && ovml_secondary_languages() ) {
-			$xml .= sprintf( "\t<sitemap>\n\t\t<loc>%s</loc>\n\t\t<lastmod>%s</lastmod>\n\t</sitemap>\n", esc_url( SEO::sitemap_url() ), gmdate( 'c' ) );
+			foreach ( SEO::sitemap_pages() as $url ) {
+				$xml .= sprintf( "	<sitemap>\n		<loc>%s</loc>\n		<lastmod>%s</lastmod>\n	</sitemap>\n", esc_url( $url ), gmdate( 'c' ) );
+			}
 		}
 		return $xml;
 	}

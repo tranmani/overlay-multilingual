@@ -105,6 +105,21 @@ class Dictionary {
 		}
 		$dict = self::get( $lang );
 
+		// Elements marked translate="no" (the HTML standard for "leave this
+		// text alone") are set aside and restored untouched — e.g. language
+		// names in the switcher, brand names. Inline elements only, which do
+		// not nest inside themselves, so the non-greedy match is safe.
+		$kept = [];
+		$html = preg_replace_callback(
+			'#<(a|span|summary|button|label|strong|em|small|b|i|bdi)\b[^>]*\stranslate=["\']no["\'][^>]*>.*?</\1>#is',
+			static function ( $m ) use ( &$kept ) {
+				$token          = "\x1Aovml" . count( $kept ) . "\x1A";
+				$kept[ $token ] = $m[0];
+				return $token;
+			},
+			$html
+		);
+
 		$swap = static function ( $raw ) use ( $dict ) {
 			$key = ovml_normalise( $raw );
 			return ( '' !== $key && isset( $dict[ $key ] ) && '' !== $dict[ $key ] ) ? $dict[ $key ] : null;
@@ -140,7 +155,7 @@ class Dictionary {
 			$parts[ $i ] = self::replace_text_only( $part, $lang );
 		}
 
-		return implode( '', $parts );
+		return $kept ? strtr( implode( '', $parts ), $kept ) : implode( '', $parts );
 	}
 
 	/** Apply a language's character replacements to text nodes, not to markup. */

@@ -129,7 +129,7 @@ class Switcher {
 				continue;
 			}
 			$items .= sprintf(
-				'<li class="ovml-switcher__item%s"><a href="%s" hreflang="%s" lang="%s"%s>%s</a></li>',
+				'<li class="ovml-switcher__item%s"><a href="%s" hreflang="%s" lang="%s" translate="no"%s>%s</a></li>',
 				$link['current'] ? ' is-current' : '',
 				esc_url( $link['url'] ),
 				esc_attr( $lang ),
@@ -144,7 +144,7 @@ class Switcher {
 		}
 
 		return sprintf(
-			'<details class="ovml-switcher ovml-switcher--dropdown"><summary aria-label="%s"><span>%s</span></summary><ul>%s</ul></details>',
+			'<details class="ovml-switcher ovml-switcher--dropdown"><summary aria-label="%s"><span translate="no">%s</span></summary><ul>%s</ul></details>',
 			esc_attr__( 'Change language', 'overlay-multilingual' ),
 			esc_html( $links[ $current ]['label'] ?? strtoupper( $current ) ),
 			$items

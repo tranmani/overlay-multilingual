@@ -147,3 +147,13 @@ details.ovml-card[open] > summary::after { content: "–"; }
 .ovml-dl { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; margin: 10px 0 0; }
 .ovml-dl dt { color: var(--ovml-muted); }
 .ovml-dl dd { margin: 0; }
+
+/* Compact per-language status (many languages) */
+.ovml-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ovml-chip { font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; line-height: 1.6; }
+.ovml-chip.is-done { background: var(--ovml-ok-soft); color: var(--ovml-ok); }
+.ovml-chip.is-missing { background: #fff; color: var(--ovml-muted); box-shadow: inset 0 0 0 1px var(--ovml-line); }
+
+/* Editor: many languages */
+.ovml-editor__tabs { flex-wrap: wrap; }
+.ovml-ai-row { margin: 0 0 12px; display: flex; gap: 10px; align-items: center; }

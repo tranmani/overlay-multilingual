@@ -64,16 +64,185 @@
 		update();
 	} );
 
-	/* "Copy original" fills an empty or confirmed field. */
+	/* "Copy original": originals are embedded once per screen as JSON. */
+	const originals = ( id ) => {
+		const el = document.getElementById( id );
+		try {
+			return el ? JSON.parse( el.textContent ) : {};
+		} catch ( err ) {
+			return {};
+		}
+	};
+	const setField = ( field, value ) => {
+		field.value = value;
+		field.dispatchEvent( new Event( 'input', { bubbles: true } ) );
+	};
 	document.addEventListener( 'click', ( e ) => {
 		const fill = e.target.closest( '[data-ovml-fill]' );
 		if ( ! fill ) {
 			return;
 		}
 		const field = document.getElementById( fill.dataset.ovmlFill );
-		field.value = fill.dataset.source;
-		field.dispatchEvent( new Event( 'input', { bubbles: true } ) );
+		setField( field, originals( fill.dataset.originals )[ fill.dataset.field ] || '' );
 		field.focus();
+	} );
+
+	/* ------------------------------------------------ AI translation -- */
+
+	const sprintf = ( text, ...args ) => args.reduce( ( out, arg, i ) => out.replace( '%' + ( i + 1 ) + '$s', arg ).replace( '%' + ( i + 1 ) + '$d', arg ), text || '' );
+
+	// Settings tab: only the chosen provider's models; custom model field when needed.
+	const providerBox = document.querySelector( '[data-ovml-provider]' );
+	const modelSelect = document.querySelector( '[data-ovml-model]' );
+	const customModel = document.querySelector( '[data-ovml-custom-model]' );
+	if ( providerBox && modelSelect ) {
+		const sync = () => {
+			const provider = ( providerBox.querySelector( 'input:checked' ) || {} ).value;
+			modelSelect.querySelectorAll( 'optgroup' ).forEach( ( group ) => {
+				const on = group.dataset.provider === provider;
+				group.hidden = ! on;
+				group.disabled = ! on;
+			} );
+			const current = modelSelect.selectedOptions[ 0 ];
+			if ( current && current.parentElement.tagName === 'OPTGROUP' && current.parentElement.disabled ) {
+				const first = modelSelect.querySelector( 'optgroup:not([disabled]) option' );
+				if ( first ) {
+					modelSelect.value = first.value;
+				}
+			}
+			customModel.hidden = modelSelect.value !== 'custom';
+		};
+		providerBox.addEventListener( 'change', sync );
+		modelSelect.addEventListener( 'change', sync );
+		sync();
+	}
+
+	const testBtn = document.querySelector( '[data-ovml-ai-test]' );
+	if ( testBtn ) {
+		const out = document.querySelector( '[data-ovml-ai-test-result]' );
+		testBtn.addEventListener( 'click', () => {
+			testBtn.disabled = true;
+			out.textContent = t.aiTesting;
+			post( { action: 'ovml_ai_test' } )
+				.then( ( res ) => {
+					out.innerHTML = '';
+					const pill = document.createElement( 'span' );
+					pill.className = 'ovml-pill ' + ( res && res.success ? 'ovml-pill--ok' : 'ovml-pill--warn' );
+					pill.textContent = ( res && res.data && res.data.message ) || t.error;
+					out.appendChild( pill );
+				} )
+				.catch( () => ( out.textContent = t.error ) )
+				.finally( () => ( testBtn.disabled = false ) );
+		} );
+	}
+
+	// Shared progress box for bulk AI jobs.
+	const aiBox = document.querySelector( '[data-ovml-ai-status]' );
+	const aiShow = ( text, pct ) => {
+		if ( ! aiBox ) {
+			return;
+		}
+		aiBox.classList.add( 'is-running' );
+		aiBox.querySelector( 'span' ).textContent = text;
+		if ( pct !== undefined ) {
+			aiBox.querySelector( '.ovml-progress span' ).style.width = Math.round( pct ) + '%';
+		}
+	};
+
+	// Strings: translate every missing phrase, batch by batch, language by language.
+	const aiStrings = document.querySelector( '[data-ovml-ai-strings]' );
+	if ( aiStrings ) {
+		aiStrings.addEventListener( 'click', async () => {
+			if ( ! window.confirm( t.aiConfirm ) ) {
+				return;
+			}
+			aiStrings.disabled = true;
+			const errors = [];
+			for ( const lang of aiStrings.dataset.langs.split( ',' ) ) {
+				let first = null;
+				for ( let guard = 0; guard < 500; guard++ ) {
+					const res = await post( { action: 'ovml_ai_strings', lang } ).catch( () => null );
+					if ( ! res || ! res.success ) {
+						errors.push( lang.toUpperCase() + ': ' + ( ( res && res.data && res.data.message ) || t.error ) );
+						break;
+					}
+					first = first === null ? res.data.remaining + 1 : first;
+					aiShow( sprintf( t.aiStrings, lang.toUpperCase(), res.data.remaining ), 100 * ( 1 - res.data.remaining / Math.max( first, 1 ) ) );
+					if ( res.data.done ) {
+						break;
+					}
+				}
+			}
+			aiShow( errors.length ? sprintf( t.aiFailed, errors.join( '; ' ) ) : t.aiDone, 100 );
+			if ( ! errors.length ) {
+				setTimeout( () => window.location.reload(), 1200 );
+			} else {
+				aiStrings.disabled = false;
+			}
+		} );
+	}
+
+	// Content: translate each missing item of the current type, one request per item.
+	const aiContent = document.querySelector( '[data-ovml-ai-content]' );
+	if ( aiContent ) {
+		aiContent.addEventListener( 'click', async () => {
+			if ( ! window.confirm( t.aiConfirm ) ) {
+				return;
+			}
+			aiContent.disabled = true;
+			const failed = [];
+			let did = 0;
+			for ( const lang of aiContent.dataset.langs.split( ',' ) ) {
+				const queue = await post( { action: 'ovml_ai_queue', lang, source: aiContent.dataset.source } ).catch( () => null );
+				if ( ! queue || ! queue.success ) {
+					failed.push( lang.toUpperCase() + ': ' + ( ( queue && queue.data && queue.data.message ) || t.error ) );
+					continue;
+				}
+				const ids = queue.data.ids;
+				for ( let i = 0; i < ids.length; i++ ) {
+					aiShow( sprintf( t.aiItems, lang.toUpperCase(), i + 1, ids.length ), ( 100 * i ) / ids.length );
+					const res = await post( { action: 'ovml_ai_object', lang, type: queue.data.type, id: ids[ i ], save: 1 } ).catch( () => null );
+					if ( res && res.success ) {
+						did++;
+					} else {
+						failed.push( '#' + ids[ i ] + ' ' + lang.toUpperCase() + ( res && res.data && res.data.message ? ' (' + res.data.message + ')' : '' ) );
+					}
+				}
+			}
+			aiShow( failed.length ? sprintf( t.aiFailed, failed.slice( 0, 8 ).join( ', ' ) ) : ( did ? t.aiDone : t.aiNothing ), 100 );
+			if ( ! failed.length && did ) {
+				setTimeout( () => window.location.reload(), 1200 );
+			} else {
+				aiContent.disabled = false;
+			}
+		} );
+	}
+
+	// Edit screens: fill one language tab with an AI translation for review.
+	document.addEventListener( 'click', ( e ) => {
+		const btn = e.target.closest( '[data-ovml-ai-fill]' );
+		if ( ! btn ) {
+			return;
+		}
+		const status = btn.parentElement.querySelector( '[data-ovml-ai-fill-status]' );
+		btn.disabled = true;
+		status.textContent = t.aiWorking;
+		post( { action: 'ovml_ai_object', lang: btn.dataset.lang, type: btn.dataset.type, id: btn.dataset.id, save: 0 } )
+			.then( ( res ) => {
+				if ( ! res || ! res.success ) {
+					status.textContent = ( res && res.data && res.data.message ) || t.error;
+					return;
+				}
+				Object.entries( res.data.fields ).forEach( ( [ field, value ] ) => {
+					const input = document.getElementById( btn.dataset.prefix + '-' + btn.dataset.lang + '-' + field );
+					if ( input ) {
+						setField( input, value );
+					}
+				} );
+				status.textContent = '';
+			} )
+			.catch( () => ( status.textContent = t.error ) )
+			.finally( () => ( btn.disabled = false ) );
 	} );
 
 	/* Copy-to-clipboard buttons. */
@@ -90,6 +259,42 @@
 		} );
 	} );
 
+	/* Updates card: check GitHub in place, no page reload. */
+	const updates = document.querySelector( '[data-ovml-updates]' );
+	if ( updates ) {
+		const btn = updates.querySelector( '[data-ovml-check-updates]' );
+		const text = updates.querySelector( '[data-ovml-update-text]' );
+		const action = updates.querySelector( '[data-ovml-update-action]' );
+		const check = () => {
+			const label = btn.textContent;
+			btn.disabled = true;
+			btn.textContent = t.checking;
+			post( { action: 'ovml_check_updates' } )
+				.then( ( res ) => {
+					if ( res && res.success ) {
+						text.innerHTML = res.data.text; // server-escaped markup
+						action.innerHTML = res.data.action;
+						updates.dataset.checked = '1';
+					} else {
+						action.innerHTML = '';
+						const pill = document.createElement( 'span' );
+						pill.className = 'ovml-pill ovml-pill--warn';
+						pill.textContent = ( res && res.data && res.data.message ) || t.error;
+						action.appendChild( pill );
+					}
+				} )
+				.catch( () => ( action.textContent = t.error ) )
+				.finally( () => {
+					btn.disabled = false;
+					btn.textContent = label;
+				} );
+		};
+		btn.addEventListener( 'click', check );
+		if ( updates.dataset.checked !== '1' ) {
+			check(); // first visit: fetch the latest release in the background
+		}
+	}
+
 	/* Confirm before going live. */
 	const statusForm = document.querySelector( '[data-ovml-status-form]' );
 	if ( statusForm ) {
@@ -101,6 +306,26 @@
 			}
 		} );
 	}
+
+	/* Languages: picking a locale fills in an empty name with its native name. */
+	const localeNames = originals( 'ovml-locale-names' );
+	document.querySelectorAll( 'input[list="ovml-locales"]' ).forEach( ( input ) => {
+		input.addEventListener( 'change', () => {
+			const row = input.closest( '.ovml-lang-row' );
+			const name = row && row.querySelector( 'input[name$="[name]"]' );
+			const social = row && row.querySelector( 'input[name$="[og_locale]"]' );
+			const code = row && row.querySelector( 'input[name$="[code]"]' );
+			if ( name && ! name.value && localeNames[ input.value ] ) {
+				name.value = localeNames[ input.value ];
+			}
+			if ( social && ! social.value ) {
+				social.value = input.value;
+			}
+			if ( code && ! code.value ) {
+				code.value = input.value.split( '_' )[ 0 ].toLowerCase();
+			}
+		} );
+	} );
 
 	/* Languages: reveal the empty row. */
 	const addLang = document.querySelector( '[data-ovml-add-lang]' );

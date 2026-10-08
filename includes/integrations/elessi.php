@@ -52,11 +52,11 @@ class Elessi {
 		$items = '';
 		foreach ( $links as $lang => $link ) {
 			if ( ! $link['current'] ) {
-				$items .= sprintf( '<li class="nasa-item-lang"><a href="%s" hreflang="%s" lang="%s">%s</a></li>', esc_url( $link['url'] ), esc_attr( $lang ), esc_attr( $lang ), esc_html( $link['label'] ) );
+				$items .= sprintf( '<li class="nasa-item-lang"><a href="%s" hreflang="%s" lang="%s" translate="no">%s</a></li>', esc_url( $link['url'] ), esc_attr( $lang ), esc_attr( $lang ), esc_html( $link['label'] ) );
 			}
 		}
 		return sprintf(
-			'<ul class="header-multi-languages ovml-switcher-elessi left rtl-right"><li class="nasa-select-languages left rtl-right desktop-margin-right-30 rtl-desktop-margin-right-0 rtl-desktop-margin-left-30 menu-item-has-children root-item li_accordion"><a href="javascript:void(0);" class="nasa-current-lang" rel="nofollow">%s</a><ul class="nasa-list-languages sub-menu">%s</ul>%s</li></ul>',
+			'<ul class="header-multi-languages ovml-switcher-elessi left rtl-right"><li class="nasa-select-languages left rtl-right desktop-margin-right-30 rtl-desktop-margin-right-0 rtl-desktop-margin-left-30 menu-item-has-children root-item li_accordion"><a href="javascript:void(0);" class="nasa-current-lang" rel="nofollow" translate="no">%s</a><ul class="nasa-list-languages sub-menu">%s</ul>%s</li></ul>',
 			esc_html( $links[ $current ]['label'] ?? strtoupper( $current ) ),
 			$items,
 			$arrow

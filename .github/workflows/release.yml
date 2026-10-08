@@ -24,7 +24,7 @@ jobs:
       - name: Build zip
         run: |
           mkdir -p build/overlay-multilingual
-          rsync -a --exclude .git --exclude .github --exclude .claude --exclude build ./ build/overlay-multilingual/
+          rsync -a --exclude .git --exclude .github --exclude .claude --exclude build --exclude docs ./ build/overlay-multilingual/
           cd build && zip -qr ../overlay-multilingual.zip overlay-multilingual
 
       - name: Attach to the release
