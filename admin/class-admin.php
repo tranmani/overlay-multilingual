@@ -26,6 +26,7 @@ class Admin {
 		add_action( 'wp_ajax_ovml_delete_string', [ __CLASS__, 'ajax_delete_string' ] );
 		add_action( 'wp_ajax_ovml_scan', [ __CLASS__, 'ajax_scan' ] );
 		add_filter( 'plugin_action_links_' . plugin_basename( OVML_FILE ), [ __CLASS__, 'action_links' ] );
+		add_filter( 'plugin_row_meta', [ __CLASS__, 'row_meta' ], 10, 2 );
 	}
 
 	public static function url( $tab = 'overview', $args = [] ) {
@@ -46,6 +47,16 @@ class Admin {
 
 	public static function action_links( $links ) {
 		array_unshift( $links, '<a href="' . esc_url( self::url() ) . '">' . esc_html__( 'Settings', 'overlay-multilingual' ) . '</a>' );
+		return $links;
+	}
+
+	/** GitHub links under the plugin's description on the Plugins screen. */
+	public static function row_meta( $links, $file ) {
+		if ( plugin_basename( OVML_FILE ) === $file ) {
+			$links[] = '<a href="' . esc_url( self::repo_url() ) . '" target="_blank" rel="noopener">' . esc_html__( 'View on GitHub', 'overlay-multilingual' ) . '</a>';
+			$links[] = '<a href="' . esc_url( self::repo_url( '/issues' ) ) . '" target="_blank" rel="noopener">' . esc_html__( 'Report an issue', 'overlay-multilingual' ) . '</a>';
+			$links[] = '<a href="' . esc_url( self::url( 'about' ) ) . '">' . esc_html__( 'About', 'overlay-multilingual' ) . '</a>';
+		}
 		return $links;
 	}
 
@@ -84,6 +95,7 @@ class Admin {
 			'strings'   => __( 'Strings', 'overlay-multilingual' ),
 			'content'   => __( 'Content', 'overlay-multilingual' ),
 			'settings'  => __( 'Settings', 'overlay-multilingual' ),
+			'about'     => __( 'About', 'overlay-multilingual' ),
 		];
 		$tab  = isset( $_GET['tab'], $tabs[ $_GET['tab'] ] ) ? sanitize_key( $_GET['tab'] ) : 'overview'; // phpcs:ignore WordPress.Security.NonceVerification
 		$status = ovml_settings()['status'];
@@ -718,6 +730,87 @@ class Admin {
 
 			<p><button class="button button-primary"><?php esc_html_e( 'Save settings', 'overlay-multilingual' ); ?></button></p>
 		</form>
+		<?php
+	}
+
+	/* -------------------------------------------------------------- about -- */
+
+	private static function repo_url( $path = '' ) {
+		return 'https://github.com/' . \OverlayML\Updater::repository() . $path;
+	}
+
+	/** Plain-text environment summary for bug reports. */
+	private static function system_info() {
+		global $wp_version;
+		$theme = wp_get_theme();
+		$s     = ovml_settings();
+		$lines = [
+			'Overlay Multilingual: ' . OVML_VERSION,
+			'WordPress: ' . $wp_version,
+			'WooCommerce: ' . ( defined( 'WC_VERSION' ) ? WC_VERSION : 'not active' ),
+			'PHP: ' . PHP_VERSION,
+			'Theme: ' . $theme->get( 'Name' ) . ' ' . $theme->get( 'Version' ) . ( $theme->parent() ? ' (child of ' . $theme->parent()->get( 'Name' ) . ')' : '' ),
+			'SEO plugin: ' . ( defined( 'RANK_MATH_VERSION' ) ? 'Rank Math ' . RANK_MATH_VERSION : ( defined( 'WPSEO_VERSION' ) ? 'Yoast ' . WPSEO_VERSION : 'none' ) ),
+			'Status: ' . $s['status'],
+			'Languages: ' . implode( ', ', array_map( static fn( $c, $l ) => "$c ({$l['locale']})", array_keys( $s['languages'] ), $s['languages'] ) ) . ' — default ' . $s['default_language'],
+			'Early loader: ' . ( file_exists( ovml_early_loader_path() ) ? 'installed' : 'missing' ),
+			'Switcher: ' . ( 'hook' === $s['switcher']['placement'] ? $s['switcher']['hook'] . ' @' . $s['switcher']['priority'] . ', ' . $s['switcher']['style'] : 'manual' ),
+		];
+		return implode( "\n", $lines );
+	}
+
+	public static function tab_about() {
+		$latest = \OverlayML\Updater::latest();
+		?>
+		<div class="ovml-card ovml-about-hero">
+			<span class="dashicons dashicons-translation ovml-about-icon" aria-hidden="true"></span>
+			<div style="flex:1;min-width:240px">
+				<h2 style="font-size:20px;margin:0 0 4px">Overlay Multilingual <span class="ovml-pill ovml-pill--off" style="vertical-align:middle"><?php echo esc_html( 'v' . OVML_VERSION ); ?></span></h2>
+				<p class="ovml-hint" style="margin:0"><?php esc_html_e( 'Make a WordPress or WooCommerce site multilingual without duplicating content. Free and open source.', 'overlay-multilingual' ); ?></p>
+			</div>
+			<div class="ovml-actions" style="margin:0;flex-wrap:wrap">
+				<a class="button button-primary" href="<?php echo esc_url( self::repo_url() ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'View on GitHub', 'overlay-multilingual' ); ?></a>
+				<a class="button" href="<?php echo esc_url( self::repo_url( '/issues/new' ) ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Report an issue', 'overlay-multilingual' ); ?></a>
+				<a class="button" href="<?php echo esc_url( self::repo_url( '/releases' ) ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Release notes', 'overlay-multilingual' ); ?></a>
+			</div>
+		</div>
+
+		<div class="ovml-grid" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">
+			<div class="ovml-card">
+				<h2><?php esc_html_e( 'What it does', 'overlay-multilingual' ); ?></h2>
+				<ul class="ovml-list">
+					<li><?php esc_html_e( 'Translations layered over your existing posts, products and terms — one product, one stock level, one checkout in every language.', 'overlay-multilingual' ); ?></li>
+					<li><?php esc_html_e( 'Language URLs (/fr/, /de/…) while the default language keeps its URLs.', 'overlay-multilingual' ); ?></li>
+					<li><?php esc_html_e( 'hreflang, translated SEO titles and descriptions, and a language sitemap.', 'overlay-multilingual' ); ?></li>
+					<li><?php esc_html_e( 'Phrase list with a site scanner for theme, page-builder and popup text.', 'overlay-multilingual' ); ?></li>
+					<li><?php esc_html_e( 'WooCommerce orders and customer emails in the customer’s language.', 'overlay-multilingual' ); ?></li>
+				</ul>
+			</div>
+			<div class="ovml-card">
+				<h2><?php esc_html_e( 'Project', 'overlay-multilingual' ); ?></h2>
+				<dl class="ovml-dl">
+					<dt><?php esc_html_e( 'Source code', 'overlay-multilingual' ); ?></dt>
+					<dd><a href="<?php echo esc_url( self::repo_url() ); ?>" target="_blank" rel="noopener"><?php echo esc_html( 'github.com/' . \OverlayML\Updater::repository() ); ?></a></dd>
+					<dt><?php esc_html_e( 'Latest release', 'overlay-multilingual' ); ?></dt>
+					<dd><?php echo $latest ? '<a href="' . esc_url( $latest['url'] ) . '" target="_blank" rel="noopener">' . esc_html( $latest['version'] ) . '</a>' : esc_html__( 'not checked yet', 'overlay-multilingual' ); ?></dd>
+					<dt><?php esc_html_e( 'License', 'overlay-multilingual' ); ?></dt>
+					<dd><a href="https://www.gnu.org/licenses/gpl-2.0.html" target="_blank" rel="noopener">GPL-2.0-or-later</a></dd>
+					<dt><?php esc_html_e( 'Contributing', 'overlay-multilingual' ); ?></dt>
+					<dd><?php printf( /* translators: %s: link to pull requests */ esc_html__( 'Bug reports and %s are welcome.', 'overlay-multilingual' ), '<a href="' . esc_url( self::repo_url( '/pulls' ) ) . '" target="_blank" rel="noopener">' . esc_html__( 'pull requests', 'overlay-multilingual' ) . '</a>' ); ?></dd>
+				</dl>
+			</div>
+		</div>
+
+		<div class="ovml-card" style="margin-top:16px">
+			<div class="ovml-card-row">
+				<div>
+					<h2><?php esc_html_e( 'System information', 'overlay-multilingual' ); ?></h2>
+					<p class="ovml-hint" style="margin:0"><?php esc_html_e( 'Paste this into a GitHub issue so problems can be reproduced. It contains no personal data.', 'overlay-multilingual' ); ?></p>
+				</div>
+				<button type="button" class="button" data-ovml-copy="#ovml-sysinfo"><?php esc_html_e( 'Copy', 'overlay-multilingual' ); ?></button>
+			</div>
+			<textarea id="ovml-sysinfo" class="large-text code" rows="10" readonly style="margin-top:12px"><?php echo esc_textarea( self::system_info() ); ?></textarea>
+		</div>
 		<?php
 	}
 

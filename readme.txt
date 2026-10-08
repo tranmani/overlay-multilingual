@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -54,6 +54,10 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.2.0 =
+* About tab with links to the GitHub project, issues and releases, and copyable system information for bug reports.
+* "View on GitHub" and "Report an issue" links on the Plugins screen.
 
 = 1.1.0 =
 * One-click updates from GitHub releases (Dashboard → Updates, Plugins screen and the Overview).

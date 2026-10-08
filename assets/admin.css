@@ -138,3 +138,12 @@ details.ovml-card[open] > summary::after { content: "–"; }
 	.ovml-lang-row { grid-template-columns: 1fr 1fr; }
 	.ovml-lang-head { display: none; }
 }
+
+/* About */
+.ovml-about-hero { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.ovml-about-icon { width: 52px; height: 52px; font-size: 52px; color: var(--ovml-accent); }
+.ovml-list { margin: 8px 0 0 18px; list-style: disc; }
+.ovml-list li { margin-bottom: 6px; }
+.ovml-dl { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; margin: 10px 0 0; }
+.ovml-dl dt { color: var(--ovml-muted); }
+.ovml-dl dd { margin: 0; }
