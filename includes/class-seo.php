@@ -69,9 +69,16 @@ class SEO {
 			foreach ( PolylangData::group( $object->ID ) as $lang => $id ) {
 				$alts[ $lang ] = ovml_url( get_permalink( $id ), $lang );
 			}
-		} elseif ( is_front_page() || ( is_home() && ovml_settings()['separate_posts'] ) ) {
+		} elseif ( is_front_page() ) {
 			foreach ( array_keys( ovml_languages() ) as $lang ) {
 				$alts[ $lang ] = ovml_url( $here, $lang );
+			}
+		} elseif ( is_home() && ovml_settings()['separate_posts'] ) {
+			// A language still borrowing the default language's posts is not an alternate.
+			foreach ( array_keys( ovml_languages() ) as $lang ) {
+				if ( ovml_is_default( $lang ) || [ 0 ] !== PolylangData::ids_in( $lang ) ) {
+					$alts[ $lang ] = ovml_url( $here, $lang );
+				}
 			}
 		} elseif ( $object instanceof \WP_Post || $object instanceof \WP_Term ) {
 			foreach ( array_keys( ovml_languages() ) as $lang ) {

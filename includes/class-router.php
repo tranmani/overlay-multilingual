@@ -126,7 +126,7 @@ class Router {
 		if ( $listing ) {
 			$ids = [];
 			foreach ( $types as $type ) {
-				$ids = array_merge( $ids, PolylangData::ids_in( ovml_lang(), $type ) );
+				$ids = array_merge( $ids, PolylangData::listing_ids( ovml_lang(), $type ) );
 			}
 			$query->set( 'post__in', $ids );
 		}
@@ -134,7 +134,7 @@ class Router {
 
 	public static function filter_widget_posts( $args ) {
 		if ( in_array( 'post', (array) ovml_settings()['separate_posts'], true ) ) {
-			$args['post__in'] = PolylangData::ids_in( ovml_lang() );
+			$args['post__in'] = PolylangData::listing_ids( ovml_lang() );
 		}
 		return $args;
 	}

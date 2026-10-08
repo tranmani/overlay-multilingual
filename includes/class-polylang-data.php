@@ -114,6 +114,15 @@ class PolylangData {
 		return $cache[ $key ];
 	}
 
+	/**
+	 * IDs to list for a language: its own posts, or the default language's posts while
+	 * it has none of that type yet (so a newly added language never shows an empty blog).
+	 */
+	public static function listing_ids( $lang, $post_type = 'post' ) {
+		$ids = self::ids_in( $lang, $post_type );
+		return [ 0 ] === $ids ? self::ids_in( ovml_default_language(), $post_type ) : $ids;
+	}
+
 	/** Set a post's language and translation links (used by the editor and CLI). */
 	public static function save( $post_id, $lang, array $links ) {
 		self::register();

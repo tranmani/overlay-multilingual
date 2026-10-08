@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,9 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.3.1 =
+* A newly added language no longer shows an empty blog: until it has posts of its own, its blog and category listings show the default language's posts (noindexed and left out of hreflang), and single posts redirect to the version that exists.
 
 = 1.3.0 =
 * AI translation with your own Anthropic (Claude) or OpenAI API key: model chooser with custom model IDs, quality setting, instructions/glossary, Test connection, and "Translate with AI" for missing phrases, whole content types, or one edit-screen tab. HTML structure is verified before anything is saved.
