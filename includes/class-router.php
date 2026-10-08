@@ -28,6 +28,9 @@ class Router {
 		add_action( 'template_redirect', [ __CLASS__, 'route_separate_posts' ], 1 );
 		add_action( 'pre_get_posts', [ __CLASS__, 'filter_lists' ] );
 		add_filter( 'widget_posts_args', [ __CLASS__, 'filter_widget_posts' ] );
+		add_filter( 'render_block_data', [ __CLASS__, 'scope_post_blocks' ] );
+		add_filter( 'render_block', [ __CLASS__, 'unscope_post_blocks' ] );
+		add_filter( 'query_loop_block_query_vars', [ __CLASS__, 'filter_query_loop' ] );
 		add_filter( 'get_previous_post_where', [ __CLASS__, 'adjacent_where' ], 10, 5 );
 		add_filter( 'get_next_post_where', [ __CLASS__, 'adjacent_where' ], 10, 5 );
 	}
@@ -137,6 +140,43 @@ class Router {
 			$args['post__in'] = PolylangData::listing_ids( ovml_lang() );
 		}
 		return $args;
+	}
+
+	/**
+	 * The core Latest Posts block queries with get_posts() and offers no args filter,
+	 * so its posts are restricted from pre_get_posts while that block renders.
+	 */
+	private static $in_latest_posts = false;
+
+	public static function scope_post_blocks( $block ) {
+		if ( 'core/latest-posts' === ( $block['blockName'] ?? '' ) && in_array( 'post', (array) ovml_settings()['separate_posts'], true ) ) {
+			self::$in_latest_posts = true;
+			add_action( 'pre_get_posts', [ __CLASS__, 'filter_block_query' ] );
+		}
+		return $block;
+	}
+
+	public static function unscope_post_blocks( $content ) {
+		if ( self::$in_latest_posts ) {
+			self::$in_latest_posts = false;
+			remove_action( 'pre_get_posts', [ __CLASS__, 'filter_block_query' ] );
+		}
+		return $content;
+	}
+
+	/** Query Loop blocks listing a separate-mode post type show the current language only. */
+	public static function filter_query_loop( $vars ) {
+		$type = $vars['post_type'] ?? 'post';
+		if ( is_string( $type ) && in_array( $type, (array) ovml_settings()['separate_posts'], true ) && empty( $vars['post__in'] ) ) {
+			$vars['post__in'] = PolylangData::listing_ids( ovml_lang(), $type );
+		}
+		return $vars;
+	}
+
+	public static function filter_block_query( $query ) {
+		if ( ! $query->get( 'post__in' ) ) {
+			$query->set( 'post__in', PolylangData::listing_ids( ovml_lang() ) );
+		}
 	}
 
 	public static function adjacent_where( $where, $in_same_term, $excluded, $taxonomy, $post ) {
