@@ -11,7 +11,6 @@
 	--ovml-warn: #9a6700;
 	--ovml-warn-soft: #fff4d6;
 	--ovml-radius: 10px;
-	max-width: 1180px;
 	margin: 20px 20px 40px 0;
 	color: var(--ovml-text);
 }
