@@ -85,11 +85,11 @@ class Admin {
 				'checking'      => __( 'Checking…', 'overlay-multilingual' ),
 				'aiStrings'     => __( 'Translating phrases into %1$s… %2$d left', 'overlay-multilingual' ),
 				'aiItems'       => __( 'Translating into %1$s: %2$d of %3$d', 'overlay-multilingual' ),
-				'aiDone'        => __( 'AI translation finished. Reloading…', 'overlay-multilingual' ),
+				'aiDone'        => __( 'Translation finished. Reloading…', 'overlay-multilingual' ),
 				'aiNothing'     => __( 'Nothing left to translate.', 'overlay-multilingual' ),
 				'aiWorking'     => __( 'Translating…', 'overlay-multilingual' ),
 				'aiFailed'      => __( 'Some items could not be translated: %s', 'overlay-multilingual' ),
-				'aiConfirm'     => __( 'Translate every missing item with AI? This uses your API credits.', 'overlay-multilingual' ),
+				'aiConfirm'     => __( 'Translate every missing item automatically? This uses your translation service credits.', 'overlay-multilingual' ),
 			],
 		] );
 	}
@@ -105,7 +105,7 @@ class Admin {
 			'languages' => __( 'Languages', 'overlay-multilingual' ),
 			'strings'   => __( 'Strings', 'overlay-multilingual' ),
 			'content'   => __( 'Content', 'overlay-multilingual' ),
-			'ai'        => __( 'AI translation', 'overlay-multilingual' ),
+			'ai'        => __( 'Automatic translation', 'overlay-multilingual' ),
 			'settings'  => __( 'Settings', 'overlay-multilingual' ),
 			'about'     => __( 'About', 'overlay-multilingual' ),
 		];
@@ -459,7 +459,7 @@ class Admin {
 			</form>
 			<span class="spacer"></span>
 			<?php if ( $langs && $columns && \OverlayML\AI::configured() ) : ?>
-				<button type="button" class="button button-primary" data-ovml-ai-strings data-langs="<?php echo esc_attr( implode( ',', $columns ) ); ?>"><?php esc_html_e( 'Translate missing with AI', 'overlay-multilingual' ); ?></button>
+				<button type="button" class="button button-primary" data-ovml-ai-strings data-langs="<?php echo esc_attr( implode( ',', $columns ) ); ?>"><?php esc_html_e( 'Auto-translate missing', 'overlay-multilingual' ); ?></button>
 			<?php endif; ?>
 			<button type="button" class="button" data-ovml-scan <?php disabled( ! $langs ); ?>><?php esc_html_e( 'Scan site for text', 'overlay-multilingual' ); ?></button>
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ovml_export_strings' ), 'ovml_export' ) ); ?>"><?php esc_html_e( 'Export', 'overlay-multilingual' ); ?></a>
@@ -580,7 +580,7 @@ class Admin {
 			<span class="spacer"></span>
 			<span class="ovml-sub" style="margin:0"><?php echo esc_html( sprintf( /* translators: %d: number of items */ _n( '%d item', '%d items', $total, 'overlay-multilingual' ), $total ) ); ?></span>
 			<?php if ( \OverlayML\AI::configured() ) : ?>
-				<button type="button" class="button button-primary" data-ovml-ai-content data-source="<?php echo esc_attr( $current ); ?>" data-langs="<?php echo esc_attr( isset( array_flip( $langs )[ $missing ] ) ? $missing : implode( ',', $langs ) ); ?>"><?php esc_html_e( 'Translate missing with AI', 'overlay-multilingual' ); ?></button>
+				<button type="button" class="button button-primary" data-ovml-ai-content data-source="<?php echo esc_attr( $current ); ?>" data-langs="<?php echo esc_attr( isset( array_flip( $langs )[ $missing ] ) ? $missing : implode( ',', $langs ) ); ?>"><?php esc_html_e( 'Auto-translate missing', 'overlay-multilingual' ); ?></button>
 			<?php endif; ?>
 		</div>
 		<div class="ovml-card ovml-scan" data-ovml-ai-status><span></span><div class="ovml-progress"><span style="width:0"></span></div></div>

@@ -1,16 +1,19 @@
 <?php
 /**
- * AI translation through Anthropic (Claude) or OpenAI, with the site owner's
- * own API key.
+ * Automatic translation with the site owner's own account at a translation
+ * service — Google Cloud Translation, DeepL, Microsoft Translator or
+ * LibreTranslate — or, as an added service, an AI model (Anthropic Claude,
+ * OpenAI).
  *
  * Calls go straight to each provider's HTTP API with wp_remote_post — a
- * WordPress plugin cannot ship Composer SDKs, and two providers share one code
- * path this way. Every request asks for JSON matching a schema, so responses
- * parse reliably; HTML fields are checked to keep the original's tag sequence
- * and are rejected (never saved half-broken) when they do not.
+ * WordPress plugin cannot ship Composer SDKs, and one code path keeps every
+ * service consistent. HTML is sent in each service's HTML mode, and every
+ * translated HTML field must keep the original's tag sequence or it is rejected
+ * (never saved half-broken). AI requests ask for JSON matching a schema.
  *
- * The key is stored encrypted with the site's AUTH_KEY, or can be defined in
- * wp-config.php as OVML_AI_KEY so it never touches the database.
+ * Keys are stored encrypted with the site's AUTH_KEY — one per service, so
+ * switching services keeps them — or can be defined in wp-config.php as
+ * OVML_TRANSLATE_KEY (any service) / OVML_AI_KEY (AI services).
  *
  * @package OverlayML
  */
@@ -23,7 +26,31 @@ class AI {
 
 	const OPTION = 'ovml_ai';
 
-	/** Suggested models per provider; any other model ID can be entered as a custom model. */
+	/** Wrapper that protects "keep untranslated" terms inside machine-translation requests. */
+	const KEEP_OPEN  = '<span translate="no" class="notranslate">';
+	const KEEP_CLOSE = '</span>';
+
+	/**
+	 * Services. 'ai' marks the AI providers (model, quality, instructions);
+	 * 'batch' and 'chars' are per-request limits of the machine services.
+	 */
+	public static function providers() {
+		return [
+			'google'    => [ 'label' => 'Google Translate', 'ai' => false, 'batch' => 100, 'chars' => 25000, 'key_url' => 'https://console.cloud.google.com/apis/library/translate.googleapis.com' ],
+			'deepl'     => [ 'label' => 'DeepL', 'ai' => false, 'batch' => 50, 'chars' => 100000, 'key_url' => 'https://www.deepl.com/your-account/keys' ],
+			'microsoft' => [ 'label' => 'Microsoft Translator', 'ai' => false, 'batch' => 100, 'chars' => 45000, 'key_url' => 'https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation' ],
+			'libre'     => [ 'label' => 'LibreTranslate', 'ai' => false, 'batch' => 50, 'chars' => 20000, 'key_url' => 'https://github.com/LibreTranslate/LibreTranslate' ],
+			'anthropic' => [ 'label' => 'Anthropic Claude', 'ai' => true, 'key_url' => 'https://console.anthropic.com/settings/keys' ],
+			'openai'    => [ 'label' => 'OpenAI', 'ai' => true, 'key_url' => 'https://platform.openai.com/api-keys' ],
+		];
+	}
+
+	public static function is_ai( $provider = null ) {
+		$provider = $provider ?? self::settings()['provider'];
+		return ! empty( self::providers()[ $provider ]['ai'] );
+	}
+
+	/** Suggested models per AI provider; any other model ID can be entered as a custom model. */
 	public static function models() {
 		return [
 			'anthropic' => [
@@ -42,8 +69,12 @@ class AI {
 
 	public static function defaults() {
 		return [
-			'provider'     => 'anthropic',
-			'key'          => '', // encrypted
+			'provider'     => 'google',
+			'keys'         => [], // provider => encrypted key
+			'region'       => '', // Microsoft Translator resource region, e.g. westeurope
+			'libre_url'    => 'https://libretranslate.com',
+			'formality'    => 'default', // DeepL: default | more | less
+			'keep'         => '', // terms never translated, one per line
 			'model'        => 'claude-opus-5-5',
 			'custom_model' => '',
 			'quality'      => 'balanced', // fast | balanced | thorough
@@ -53,11 +84,21 @@ class AI {
 
 	public static function settings() {
 		$saved = get_option( self::OPTION, [] );
-		return array_merge( self::defaults(), is_array( $saved ) ? $saved : [] );
+		$saved = is_array( $saved ) ? $saved : [];
+		// 1.3.x stored one AI key under 'key' for the provider of the time.
+		if ( ! empty( $saved['key'] ) && empty( $saved['keys'] ) ) {
+			$saved['keys'] = [ $saved['provider'] ?? 'anthropic' => $saved['key'] ];
+		}
+		unset( $saved['key'] );
+		if ( ! isset( $saved['provider'] ) && ! empty( $saved['keys'] ) ) {
+			$saved['provider'] = array_key_first( $saved['keys'] );
+		}
+		return array_merge( self::defaults(), $saved );
 	}
 
 	public static function save_settings( array $changes ) {
-		update_option( self::OPTION, array_merge( self::settings(), $changes ), false );
+		$all = array_merge( self::settings(), $changes );
+		update_option( self::OPTION, $all, false );
 	}
 
 	/* --------------------------------------------------------------- key -- */
@@ -82,22 +123,45 @@ class AI {
 		return (string) openssl_decrypt( substr( $raw, 16 ), 'aes-256-cbc', self::cipher_key(), OPENSSL_RAW_DATA, substr( $raw, 0, 16 ) );
 	}
 
-	public static function key() {
-		return defined( 'OVML_AI_KEY' ) && OVML_AI_KEY ? (string) OVML_AI_KEY : self::decrypt( self::settings()['key'] );
+	/** wp-config.php constant that holds the key for a provider, if any is defined. */
+	private static function config_constant( $provider ) {
+		if ( defined( 'OVML_TRANSLATE_KEY' ) && OVML_TRANSLATE_KEY ) {
+			return 'OVML_TRANSLATE_KEY';
+		}
+		if ( self::is_ai( $provider ) && defined( 'OVML_AI_KEY' ) && OVML_AI_KEY ) {
+			return 'OVML_AI_KEY';
+		}
+		return '';
 	}
 
-	public static function key_from_config() {
-		return defined( 'OVML_AI_KEY' ) && OVML_AI_KEY;
+	public static function key( $provider = null ) {
+		$provider = $provider ?? self::settings()['provider'];
+		$constant = self::config_constant( $provider );
+		return $constant ? (string) constant( $constant ) : self::decrypt( self::settings()['keys'][ $provider ] ?? '' );
+	}
+
+	public static function key_from_config( $provider = null ) {
+		return '' !== self::config_constant( $provider ?? self::settings()['provider'] );
 	}
 
 	/** Last four characters only — for "key saved (…abcd)" displays. */
-	public static function key_hint() {
-		$key = self::key();
+	public static function key_hint( $provider = null ) {
+		$key = self::key( $provider );
 		return '' === $key ? '' : '…' . substr( $key, -4 );
 	}
 
 	public static function configured() {
-		return '' !== self::key() && '' !== self::model();
+		$s = self::settings();
+		if ( ! isset( self::providers()[ $s['provider'] ] ) ) {
+			return false;
+		}
+		if ( 'libre' === $s['provider'] ) {
+			return '' !== trim( (string) $s['libre_url'] ); // the key is optional on self-hosted servers
+		}
+		if ( '' === self::key() ) {
+			return false;
+		}
+		return ! self::is_ai() || '' !== self::model();
 	}
 
 	public static function model() {
@@ -105,7 +169,234 @@ class AI {
 		return 'custom' === $s['model'] ? trim( (string) $s['custom_model'] ) : (string) $s['model'];
 	}
 
-	/* ------------------------------------------------------------ request -- */
+	/** Human name of what is in use, for messages: "DeepL" or "claude-opus-5-5". */
+	public static function engine_label() {
+		return self::is_ai() ? self::model() : self::providers()[ self::settings()['provider'] ]['label'];
+	}
+
+	/* ------------------------------------------------- language codes -- */
+
+	/**
+	 * Provider language code for a site language, from its WordPress locale
+	 * (pt_BR, zh_TW, en_GB …) so regional variants map correctly.
+	 */
+	public static function lang_code( $provider, $lang, $target = true ) {
+		$locale = (string) ( ovml_languages()[ $lang ]['locale'] ?? $lang );
+		$parts  = preg_split( '/[_-]/', strtolower( $locale ) );
+		$base   = $parts[0];
+		$region = $parts[1] ?? '';
+		switch ( $provider ) {
+			case 'deepl':
+				if ( ! $target ) {
+					return strtoupper( $base );
+				}
+				if ( 'en' === $base ) {
+					return 'us' === $region ? 'EN-US' : 'EN-GB';
+				}
+				if ( 'pt' === $base ) {
+					return 'br' === $region ? 'PT-BR' : 'PT-PT';
+				}
+				if ( 'zh' === $base ) {
+					return in_array( $region, [ 'tw', 'hk' ], true ) ? 'ZH-HANT' : 'ZH-HANS';
+				}
+				return strtoupper( 'no' === $base ? 'nb' : $base );
+			case 'google':
+				if ( 'zh' === $base ) {
+					return in_array( $region, [ 'tw', 'hk' ], true ) ? 'zh-TW' : 'zh-CN';
+				}
+				if ( 'pt' === $base && 'pt' === $region ) {
+					return 'pt-PT';
+				}
+				return 'nb' === $base ? 'no' : $base;
+			case 'microsoft':
+				if ( 'zh' === $base ) {
+					return in_array( $region, [ 'tw', 'hk' ], true ) ? 'zh-Hant' : 'zh-Hans';
+				}
+				if ( 'pt' === $base && 'pt' === $region ) {
+					return 'pt-pt';
+				}
+				return 'no' === $base ? 'nb' : $base;
+			default:
+				return $base;
+		}
+	}
+
+	/* --------------------------------------------- machine translation -- */
+
+	private static function keep_terms() {
+		$terms = array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', (string) self::settings()['keep'] ) ), 'strlen' );
+		usort( $terms, static fn( $a, $b ) => strlen( $b ) - strlen( $a ) ); // longest first
+		return $terms;
+	}
+
+	/** Wrap "keep untranslated" terms (outside tags) so services leave them alone. */
+	private static function protect( $text, array $terms ) {
+		if ( ! $terms ) {
+			return $text;
+		}
+		$quoted = implode( '|', array_map( static fn( $t ) => preg_quote( $t, '/' ), $terms ) );
+		$parts  = preg_split( '/(<[^>]*>)/', $text, -1, PREG_SPLIT_DELIM_CAPTURE );
+		foreach ( $parts as $i => $part ) {
+			if ( '' !== $part && '<' !== $part[0] ) {
+				$parts[ $i ] = preg_replace( '/(?<![\p{L}\p{N}])(' . $quoted . ')(?![\p{L}\p{N}])/u', self::KEEP_OPEN . '$1' . self::KEEP_CLOSE, $part );
+			}
+		}
+		return implode( '', $parts );
+	}
+
+	private static function unprotect( $text ) {
+		return preg_replace( '#<span translate="no" class="notranslate">(.*?)</span>#s', '$1', (string) $text );
+	}
+
+	/**
+	 * Translate [id => text] with a machine-translation service.
+	 *
+	 * @return array|\WP_Error [id => translation]
+	 */
+	private static function translate_machine( array $items, $lang ) {
+		$provider = self::settings()['provider'];
+		$meta     = self::providers()[ $provider ];
+		$terms    = self::keep_terms();
+		$prepared = [];
+		foreach ( $items as $id => $text ) {
+			$prepared[ $id ] = self::protect( (string) $text, $terms );
+		}
+
+		// Chunks within the service's per-request limits.
+		$chunks = [];
+		$chunk  = [];
+		$size   = 0;
+		foreach ( $prepared as $id => $text ) {
+			if ( $chunk && ( count( $chunk ) >= $meta['batch'] || $size + strlen( $text ) > $meta['chars'] ) ) {
+				$chunks[] = $chunk;
+				$chunk    = [];
+				$size     = 0;
+			}
+			$chunk[ $id ] = $text;
+			$size        += strlen( $text );
+		}
+		if ( $chunk ) {
+			$chunks[] = $chunk;
+		}
+
+		$replace = (array) ( ovml_languages()[ $lang ]['replace'] ?? [] );
+		$out     = [];
+		foreach ( $chunks as $chunk ) {
+			$texts  = array_values( $chunk );
+			$result = self::request_machine( $provider, $texts, $lang );
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+			foreach ( array_keys( $chunk ) as $i => $id ) {
+				$text = self::unprotect( $result[ $i ] ?? '' );
+				if ( false === strpos( (string) $items[ $id ], '<' ) ) {
+					// Plain text went through HTML mode: turn entities back into characters.
+					$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				if ( $replace ) {
+					$text = strtr( $text, $replace );
+				}
+				if ( '' !== trim( $text ) && self::same_markup( $items[ $id ], $text ) ) {
+					$out[ $id ] = $text;
+				}
+			}
+		}
+		return $out;
+	}
+
+	/** One request to a machine-translation service. Returns translations in input order. */
+	private static function request_machine( $provider, array $texts, $lang ) {
+		$s       = self::settings();
+		$key     = self::key( $provider );
+		$source  = self::lang_code( $provider, ovml_default_language(), false );
+		$target  = self::lang_code( $provider, $lang );
+		$attempt = 0;
+
+		do {
+			switch ( $provider ) {
+				case 'google':
+					$response = wp_remote_post( 'https://translation.googleapis.com/language/translate/v2?key=' . rawurlencode( $key ), [
+						'timeout' => 60,
+						'headers' => [ 'content-type' => 'application/json' ],
+						'body'    => wp_json_encode( [ 'q' => $texts, 'source' => $source, 'target' => $target, 'format' => 'html' ] ),
+					] );
+					break;
+				case 'deepl':
+					$host = ':fx' === substr( $key, -3 ) ? 'api-free.deepl.com' : 'api.deepl.com';
+					$body = [ 'text' => $texts, 'source_lang' => $source, 'target_lang' => $target, 'tag_handling' => 'html', 'preserve_formatting' => true ];
+					if ( 'default' !== $s['formality'] ) {
+						$body['formality'] = 'more' === $s['formality'] ? 'prefer_more' : 'prefer_less';
+					}
+					$response = wp_remote_post( "https://$host/v2/translate", [
+						'timeout' => 60,
+						'headers' => [ 'content-type' => 'application/json', 'authorization' => 'DeepL-Auth-Key ' . $key ],
+						'body'    => wp_json_encode( $body ),
+					] );
+					break;
+				case 'microsoft':
+					$headers = [ 'content-type' => 'application/json', 'Ocp-Apim-Subscription-Key' => $key ];
+					if ( '' !== trim( (string) $s['region'] ) ) {
+						$headers['Ocp-Apim-Subscription-Region'] = trim( (string) $s['region'] );
+					}
+					$response = wp_remote_post( 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&textType=html&from=' . rawurlencode( $source ) . '&to=' . rawurlencode( $target ), [
+						'timeout' => 60,
+						'headers' => $headers,
+						'body'    => wp_json_encode( array_map( static fn( $t ) => [ 'Text' => $t ], $texts ) ),
+					] );
+					break;
+				default: // libre
+					$body = [ 'q' => $texts, 'source' => $source, 'target' => $target, 'format' => 'html' ];
+					if ( '' !== $key ) {
+						$body['api_key'] = $key;
+					}
+					$response = wp_remote_post( untrailingslashit( (string) $s['libre_url'] ) . '/translate', [
+						'timeout' => 120,
+						'headers' => [ 'content-type' => 'application/json' ],
+						'body'    => wp_json_encode( $body ),
+					] );
+			}
+			if ( is_wp_error( $response ) ) {
+				return $response;
+			}
+			$code = wp_remote_retrieve_response_code( $response );
+			if ( in_array( $code, [ 429, 500, 502, 503 ], true ) && 0 === $attempt ) {
+				$wait = (int) wp_remote_retrieve_header( $response, 'retry-after' );
+				sleep( max( 2, min( 20, $wait ?: 5 ) ) );
+				++$attempt;
+				continue;
+			}
+			break;
+		} while ( true );
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( $code < 200 || $code >= 300 ) {
+			$message = $data['error']['message'] ?? $data['message'] ?? ( is_string( $data['error'] ?? null ) ? $data['error'] : '' );
+			if ( 456 === $code && 'deepl' === $provider ) {
+				$message = __( 'DeepL quota exceeded for this billing period.', 'overlay-multilingual' );
+			}
+			return new \WP_Error( 'ovml_mt_http', sprintf( '%s (HTTP %d)', $message ?: wp_remote_retrieve_response_message( $response ), $code ) );
+		}
+
+		switch ( $provider ) {
+			case 'google':
+				$list = array_column( (array) ( $data['data']['translations'] ?? [] ), 'translatedText' );
+				break;
+			case 'deepl':
+				$list = array_column( (array) ( $data['translations'] ?? [] ), 'text' );
+				break;
+			case 'microsoft':
+				$list = array_map( static fn( $row ) => $row['translations'][0]['text'] ?? '', (array) $data );
+				break;
+			default:
+				$list = (array) ( $data['translatedText'] ?? [] );
+		}
+		if ( count( $list ) !== count( $texts ) ) {
+			return new \WP_Error( 'ovml_mt_count', __( 'The translation service returned an unexpected response.', 'overlay-multilingual' ) );
+		}
+		return array_map( 'strval', $list );
+	}
+
+	/* ------------------------------------------------------ AI request -- */
 
 	/**
 	 * One JSON-schema-constrained completion. Returns the decoded object or a
@@ -243,6 +534,9 @@ class AI {
 			$pairs   = array_map( static fn( $f, $t ) => "\"$f\" → \"$t\"", array_keys( $language['replace'] ), $language['replace'] );
 			$prompt .= "\n\nSpelling rule for this language: always write " . implode( ', ', $pairs ) . '.';
 		}
+		if ( self::keep_terms() ) {
+			$prompt .= "\n\nNever translate these terms; keep them exactly as written: " . implode( ', ', self::keep_terms() ) . '.';
+		}
 		if ( '' !== $extra ) {
 			$prompt .= "\n\nInstructions from the site owner:\n" . $extra;
 		}
@@ -257,10 +551,14 @@ class AI {
 	}
 
 	/**
-	 * Translate a list of [id => text] into $lang. Returns [id => translation]
-	 * for the items that came back valid, or WP_Error when the request failed.
+	 * Translate a list of [id => text] into $lang with the configured service.
+	 * Returns [id => translation] for the items that came back valid, or
+	 * WP_Error when the request failed.
 	 */
 	public static function translate_items( array $items, $lang ) {
+		if ( ! self::is_ai() ) {
+			return self::translate_machine( $items, $lang );
+		}
 		$schema = [
 			'type'                 => 'object',
 			'properties'           => [
@@ -365,16 +663,19 @@ class AI {
 		return $result;
 	}
 
-	/** Cheapest possible round-trip to check the key and model. */
+	/** Cheapest possible round-trip to check the key (and model). */
 	public static function test() {
 		$started = microtime( true );
 		$result  = self::translate_items( [ 'hello' => 'Hello, welcome to our shop.' ], ovml_secondary_languages()[0] ?? 'fr' );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
+		if ( ! isset( $result['hello'] ) ) {
+			return new \WP_Error( 'ovml_mt_test', __( 'The service answered, but returned no translation.', 'overlay-multilingual' ) );
+		}
 		return [
-			'model'   => self::model(),
-			'sample'  => $result['hello'] ?? '',
+			'model'   => self::engine_label(),
+			'sample'  => $result['hello'],
 			'seconds' => round( microtime( true ) - $started, 1 ),
 		];
 	}

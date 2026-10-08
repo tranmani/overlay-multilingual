@@ -156,3 +156,16 @@ details.ovml-card[open] > summary::after { content: "–"; }
 /* Editor: many languages */
 .ovml-editor__tabs { flex-wrap: wrap; }
 .ovml-ai-row { margin: 0 0 12px; display: flex; gap: 10px; align-items: center; }
+
+/* Automatic translation: service picker */
+.ovml-provider-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.ovml-provider-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; align-content: start; }
+.ovml-provider-group > .ovml-sub { grid-column: 1 / -1; margin: 0; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+.ovml-provider { position: relative; display: block; cursor: pointer; }
+.ovml-provider input { position: absolute; opacity: 0; }
+.ovml-provider > span { display: grid; gap: 4px; height: 100%; padding: 12px 14px; border: 1px solid var(--ovml-line); border-radius: var(--ovml-radius); background: #fff; transition: border-color .15s, box-shadow .15s; }
+.ovml-provider > span em { justify-self: start; font-style: normal; }
+.ovml-provider small { color: var(--ovml-muted); line-height: 1.45; }
+.ovml-provider input:checked + span { border-color: var(--ovml-accent); box-shadow: 0 0 0 1px var(--ovml-accent); }
+.ovml-provider input:focus-visible + span { outline: 2px solid var(--ovml-accent); outline-offset: 2px; }
+@media (max-width: 960px) { .ovml-provider-grid { grid-template-columns: 1fr; } }

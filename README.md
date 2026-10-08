@@ -11,7 +11,7 @@ Make a WordPress or WooCommerce site multilingual **without duplicating content*
 - SEO: hreflang + x-default, html lang, noindex for untranslated pages, language sitemap, Rank Math and Yoast integration
 - Off / Preview / Live rollout, optional first-visit device-language detection
 - Language switcher: shortcode, template tag or any theme hook; dropdown, inline or theme-native
-- AI translation with your own Anthropic (Claude) or OpenAI key — model chooser, custom models, test connection, one-click bulk translation, HTML verified
+- Automatic translation with your own Google Translate, DeepL, Microsoft Translator or LibreTranslate account — or Claude / OpenAI as an added AI service — test connection, one-click bulk translation, "keep untranslated" terms, HTML verified
 - Official language packs downloaded automatically for core, WooCommerce, plugins and themes — you only translate your own text
 - Scales to many languages: per-language sitemaps, language picker in the phrase editor, compact status chips
 - WP-CLI import/export, filters throughout, no external services, no tracking, no ads
@@ -26,8 +26,8 @@ Make a WordPress or WooCommerce site multilingual **without duplicating content*
 | **Overview** — setup checklist, Off / Preview / Live, coverage per language, updates | **Languages** — add any WordPress locale; language packs download automatically |
 | ![Strings: phrase editor with language picker and AI translation](docs/screenshots/strings.png) | ![Content: translation status of every item per language](docs/screenshots/content.png) |
 | **Strings** — phrases found by the scanner; one language at a time; translate missing with AI | **Content** — per-language status chips; bulk translate with AI |
-| ![Edit screen: translation tabs per language with AI button](docs/screenshots/editor.png) | ![AI translation settings: Claude or OpenAI, model chooser, test connection](docs/screenshots/ai.png) |
-| **Edit screens** — a tab per language, "Copy original", "Translate with AI" | **AI translation** — your own Claude or OpenAI key, model chooser, test connection |
+| ![Edit screen: translation tabs per language with AI button](docs/screenshots/editor.png) | ![Automatic translation settings: Google, DeepL, Microsoft, LibreTranslate or AI](docs/screenshots/ai.png) |
+| **Edit screens** — a tab per language, "Copy original", "Auto-translate" | **Automatic translation** — Google, DeepL, Microsoft, LibreTranslate, or Claude / OpenAI |
 | ![Settings](docs/screenshots/settings.png) | |
 | **Settings** — what gets translated, switcher placement and style, visitors, SEO, WooCommerce | |
 

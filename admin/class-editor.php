@@ -89,7 +89,7 @@ class Editor {
 					esc_attr( $lang ),
 					esc_attr( $id_prefix ),
 					/* translators: %s: language name */
-					esc_html( sprintf( __( 'Translate into %s with AI', 'overlay-multilingual' ), ovml_languages()[ $lang ]['name'] ) )
+					esc_html( sprintf( __( 'Auto-translate into %s', 'overlay-multilingual' ), ovml_languages()[ $lang ]['name'] ) )
 				);
 			}
 			foreach ( $fields as $field => $cfg ) {

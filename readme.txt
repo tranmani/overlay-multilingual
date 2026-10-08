@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.3.3
+Stable tag: 1.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,7 +24,7 @@ Overlay Multilingual layers translations over your existing posts, pages, produc
 * **Safe rollout** — Off, Preview (only for browsers that opened a secret link) and Live.
 * **Language switcher** — shortcode, template tag or automatic placement on any theme hook; dropdown, inline or theme-native style.
 * **Popups** — Brave Popup Builder popups are translated through the phrase list.
-* **AI translation** — bring your own Anthropic (Claude) or OpenAI key; translate missing phrases, whole content types or a single edit-screen tab, with HTML checked before saving.
+* **Automatic translation** — bring your own Google Translate, DeepL, Microsoft Translator or LibreTranslate account, or an AI model (Anthropic Claude, OpenAI) as an added service; translate missing phrases, whole content types or a single edit-screen tab, with HTML checked before saving.
 * **Language packs** — WordPress, WooCommerce and plugin/theme text in each language is downloaded automatically.
 * **Updates** — new GitHub releases appear in WordPress's normal updates with a one-click "Update now".
 * **Developer friendly** — WP-CLI import/export in one JSON format, filters for everything, no external services, no tracking, no ads.
@@ -56,6 +56,13 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.4.0 =
+* "AI translation" is now **Automatic translation**: choose Google Translate (Cloud Translation API), DeepL (Free or Pro, with formal/informal address), Microsoft Translator (with region) or LibreTranslate (self-hostable) — or Anthropic Claude / OpenAI as an added AI service.
+* One encrypted key per service, so switching services keeps your keys; `OVML_TRANSLATE_KEY` in wp-config.php works for any service.
+* "Keep untranslated" list: brand names and terms every service leaves exactly as written.
+* Language codes follow each language's WordPress locale (pt_BR, zh_TW, en_GB …) per service; per-language character replacements apply to every service.
+* Settings from 1.3 (AI key, model) carry over automatically.
 
 = 1.3.3 =
 * The settings screens use the full width of the admin area.

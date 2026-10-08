@@ -87,33 +87,51 @@
 		field.focus();
 	} );
 
-	/* ------------------------------------------------ AI translation -- */
+	/* ------------------------------------------ automatic translation -- */
 
 	const sprintf = ( text, ...args ) => args.reduce( ( out, arg, i ) => out.replace( '%' + ( i + 1 ) + '$s', arg ).replace( '%' + ( i + 1 ) + '$d', arg ), text || '' );
 
-	// Settings tab: only the chosen provider's models; custom model field when needed.
+	// Settings tab: show the chosen service's fields, its saved-key hint and (AI) its models.
 	const providerBox = document.querySelector( '[data-ovml-provider]' );
 	const modelSelect = document.querySelector( '[data-ovml-model]' );
 	const customModel = document.querySelector( '[data-ovml-custom-model]' );
-	if ( providerBox && modelSelect ) {
+	const keyInput = document.querySelector( '[data-ovml-key]' );
+	const removeKey = document.querySelector( '[data-ovml-remove-key]' );
+	if ( providerBox ) {
 		const sync = () => {
-			const provider = ( providerBox.querySelector( 'input:checked' ) || {} ).value;
-			modelSelect.querySelectorAll( 'optgroup' ).forEach( ( group ) => {
-				const on = group.dataset.provider === provider;
-				group.hidden = ! on;
-				group.disabled = ! on;
+			const radio = providerBox.querySelector( 'input:checked' ) || {};
+			const provider = radio.value;
+			document.querySelectorAll( '[data-ovml-for]' ).forEach( ( el ) => {
+				el.hidden = ! el.dataset.ovmlFor.split( ' ' ).includes( provider );
 			} );
-			const current = modelSelect.selectedOptions[ 0 ];
-			if ( current && current.parentElement.tagName === 'OPTGROUP' && current.parentElement.disabled ) {
-				const first = modelSelect.querySelector( 'optgroup:not([disabled]) option' );
-				if ( first ) {
-					modelSelect.value = first.value;
-				}
+			if ( keyInput ) {
+				const hint = radio.dataset ? radio.dataset.keyHint : '';
+				keyInput.placeholder = hint ? sprintf( keyInput.dataset.saved, hint ) : keyInput.dataset.empty;
+				keyInput.value = '';
 			}
-			customModel.hidden = modelSelect.value !== 'custom';
+			if ( removeKey ) {
+				removeKey.hidden = ! ( radio.dataset && radio.dataset.keyHint );
+			}
+			if ( modelSelect ) {
+				modelSelect.querySelectorAll( 'optgroup' ).forEach( ( group ) => {
+					const on = group.dataset.provider === provider;
+					group.hidden = ! on;
+					group.disabled = ! on;
+				} );
+				const current = modelSelect.selectedOptions[ 0 ];
+				if ( current && current.parentElement.tagName === 'OPTGROUP' && current.parentElement.disabled ) {
+					const first = modelSelect.querySelector( 'optgroup:not([disabled]) option' );
+					if ( first ) {
+						modelSelect.value = first.value;
+					}
+				}
+				customModel.hidden = modelSelect.value !== 'custom';
+			}
 		};
 		providerBox.addEventListener( 'change', sync );
-		modelSelect.addEventListener( 'change', sync );
+		if ( modelSelect ) {
+			modelSelect.addEventListener( 'change', sync );
+		}
 		sync();
 	}
 
