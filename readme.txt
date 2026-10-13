@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,11 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.4.1 =
+* Language sitemaps list only what your SEO plugin indexes: items or whole post types/taxonomies set to noindex in Rank Math or Yoast (e.g. tag archives) and items whose canonical points elsewhere are left out, so Search Console no longer reports "Submitted URL marked noindex".
+* A manual canonical, or a Rank Math redirection, that points to another page of the site now stays in the visitor's language (/de/x/ -> /de/y/ instead of /y/).
+* New filters `ovml_sitemap_include_post` and `ovml_sitemap_include_term`.
 
 = 1.4.0 =
 * "AI translation" is now **Automatic translation**: choose Google Translate (Cloud Translation API), DeepL (Free or Pro, with formal/informal address), Microsoft Translator (with region) or LibreTranslate (self-hostable) — or Anthropic Claude / OpenAI as an added AI service.

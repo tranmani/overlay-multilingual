@@ -208,9 +208,24 @@ class SEO {
 		return $pages;
 	}
 
-	private static function is_noindex( $post_id ) {
-		$rank_math = (array) get_post_meta( $post_id, 'rank_math_robots', true );
-		return in_array( 'noindex', $rank_math, true ) || '1' === get_post_meta( $post_id, '_yoast_wpseo_meta-robots-noindex', true );
+	/**
+	 * Whether a post belongs in the language sitemaps: the SEO plugin indexes it in the default language and its
+	 * canonical is its own URL. SEO integrations (Rank Math, Yoast) decide through the `ovml_sitemap_include_post`
+	 * filter; without one, everything translated is listed.
+	 */
+	private static function include_post( $post_id, $lang ) {
+		return (bool) apply_filters( 'ovml_sitemap_include_post', true, (int) $post_id, $lang );
+	}
+
+	/** Same for a term (`ovml_sitemap_include_term`), e.g. tag archives set to noindex. */
+	private static function include_term( $term, $lang ) {
+		return (bool) apply_filters( 'ovml_sitemap_include_term', true, $term, $lang );
+	}
+
+	/** Whether $canonical (an SEO plugin's manual canonical) points somewhere other than $own. */
+	public static function canonical_elsewhere( $canonical, $own ) {
+		$canonical = trim( (string) $canonical );
+		return '' !== $canonical && untrailingslashit( strtok( $canonical, '#' ) ) !== untrailingslashit( (string) $own );
 	}
 
 	public static function flush_sitemaps() {
@@ -236,13 +251,13 @@ class SEO {
 		] ) : [];
 		$front = (int) get_option( 'page_on_front' );
 		foreach ( $ids as $id ) {
-			if ( $front !== (int) $id && null !== ovml_post_tr( $id, 'title', $lang ) && ! self::is_noindex( $id ) ) {
+			if ( $front !== (int) $id && null !== ovml_post_tr( $id, 'title', $lang ) && self::include_post( $id, $lang ) ) {
 				$urls[] = ovml_url( get_permalink( $id ), $lang );
 			}
 		}
 		$terms = get_terms( [ 'taxonomy' => ovml_translatable_taxonomies(), 'hide_empty' => true ] );
 		foreach ( is_array( $terms ) ? $terms : [] as $term ) {
-			if ( null !== ovml_term_tr( $term->term_id, 'name', $lang ) ) {
+			if ( null !== ovml_term_tr( $term->term_id, 'name', $lang ) && self::include_term( $term, $lang ) ) {
 				$urls[] = ovml_url( get_term_link( $term ), $lang );
 			}
 		}
