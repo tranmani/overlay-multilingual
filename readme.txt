@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.4.1
+Stable tag: 1.4.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,11 @@ Filters: `ovml_alternates`, `ovml_sitemap_urls`, `ovml_scan_urls`, `ovml_skip_pa
 WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file>]`, `wp ovml missing [--lang=<lang>] [--clear]`.
 
 == Changelog ==
+
+= 1.4.2 =
+* Fix: pages whose slug starts with a language code returned 404 in that language (e.g. /de/delivery-information/). WordPress strips the home path from the request, and the prefixed home URL made it strip the language code a second time, from the slug.
+* Language sitemaps no longer list product attributes without archives (they appeared as ?taxonomy=pa_...&term=... URLs that only showed the home page).
+* Language sitemaps no longer list the posts page of a language that still borrows the default language's posts (that listing is noindexed).
 
 = 1.4.1 =
 * Language sitemaps list only what your SEO plugin indexes: items or whole post types/taxonomies set to noindex in Rank Math or Yoast (e.g. tag archives) and items whose canonical points elsewhere are left out, so Search Console no longer reports "Submitted URL marked noindex".

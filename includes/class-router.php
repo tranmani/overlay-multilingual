@@ -22,6 +22,8 @@ class Router {
 			return;
 		}
 		add_filter( 'home_url', [ __CLASS__, 'home_url' ], 20 );
+		add_filter( 'do_parse_request', [ __CLASS__, 'start_parsing' ], PHP_INT_MAX );
+		add_action( 'parse_request', [ __CLASS__, 'stop_parsing' ], PHP_INT_MIN );
 		add_filter( 'post_link', [ __CLASS__, 'separate_post_link' ], 20, 2 );
 		add_filter( 'post_type_link', [ __CLASS__, 'separate_post_link' ], 20, 2 );
 		add_filter( 'redirect_canonical', [ __CLASS__, 'redirect_canonical' ], 20, 2 );
@@ -68,8 +70,26 @@ class Router {
 		}, $html );
 	}
 
+	/** True while WP::parse_request() matches the (already prefix-stripped) request against the rewrite rules. */
+	private static $parsing = false;
+
 	public static function home_url( $url ) {
-		return ovml_is_default( ovml_lang() ) ? $url : ovml_url( $url, ovml_lang() );
+		return self::$parsing || ovml_is_default( ovml_lang() ) ? $url : ovml_url( $url, ovml_lang() );
+	}
+
+	/**
+	 * WordPress strips home_url()'s path from the request before matching rewrite rules. With the
+	 * prefix on home_url() that would strip it a second time, from the slug itself: under /de/,
+	 * "delivery-information" became "livery-information" and 404ed. Keep home_url() unprefixed
+	 * until parsing is done.
+	 */
+	public static function start_parsing( $parse ) {
+		self::$parsing = (bool) $parse;
+		return $parse;
+	}
+
+	public static function stop_parsing() {
+		self::$parsing = false;
 	}
 
 	/** Separate-mode posts always live under their own language's prefix. */

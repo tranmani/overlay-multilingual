@@ -250,12 +250,19 @@ class SEO {
 			'meta_key'       => OVML_META, // phpcs:ignore WordPress.DB.SlowDBQuery -- cached
 		] ) : [];
 		$front = (int) get_option( 'page_on_front' );
+		$skip  = [ $front ];
+		// The posts page of a language that still borrows the default language's posts is noindexed (see alternates()).
+		if ( in_array( 'post', (array) ovml_settings()['separate_posts'], true ) && [ 0 ] === PolylangData::ids_in( $lang ) ) {
+			$skip[] = (int) get_option( 'page_for_posts' );
+		}
 		foreach ( $ids as $id ) {
-			if ( $front !== (int) $id && null !== ovml_post_tr( $id, 'title', $lang ) && self::include_post( $id, $lang ) ) {
+			if ( ! in_array( (int) $id, $skip, true ) && null !== ovml_post_tr( $id, 'title', $lang ) && self::include_post( $id, $lang ) ) {
 				$urls[] = ovml_url( get_permalink( $id ), $lang );
 			}
 		}
-		$terms = get_terms( [ 'taxonomy' => ovml_translatable_taxonomies(), 'hide_empty' => true ] );
+		// Attributes are translatable for their names, but only those with archives have pages of their own.
+		$taxonomies = array_values( array_filter( ovml_translatable_taxonomies(), 'is_taxonomy_viewable' ) );
+		$terms      = $taxonomies ? get_terms( [ 'taxonomy' => $taxonomies, 'hide_empty' => true ] ) : [];
 		foreach ( is_array( $terms ) ? $terms : [] as $term ) {
 			if ( null !== ovml_term_tr( $term->term_id, 'name', $lang ) && self::include_term( $term, $lang ) ) {
 				$urls[] = ovml_url( get_term_link( $term ), $lang );
