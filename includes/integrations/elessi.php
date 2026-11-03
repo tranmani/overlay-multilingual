@@ -7,6 +7,9 @@
  * `nasa_mobile_topbar_menu` (priority 10) using WPML markup. With the switcher
  * placed on that hook at priority 9 and style "theme", the same markup is
  * printed so it sits beside the currency switcher with the theme's styling.
+ * Both end up in one list: the theme builds its mobile menu from the first
+ * `.header-multi-languages` only, so a second list (the currencies) would be
+ * missing from the mobile sidebar.
  *
  * @package OverlayML
  */
@@ -16,6 +19,11 @@ namespace OverlayML\Integrations;
 defined( 'ABSPATH' ) || exit;
 
 class Elessi {
+
+	const OPEN = '<ul class="header-multi-languages ovml-switcher-elessi left rtl-right">';
+
+	/** The language item from the last markup() call. */
+	private static $item = '';
 
 	public static function active() {
 		return 'elessi-theme' === get_template();
@@ -34,6 +42,10 @@ class Elessi {
 		$s = ovml_settings()['switcher'];
 		if ( 'hook' === $s['placement'] && 'nasa_topbar_menu' === $s['hook'] ) {
 			add_action( 'nasa_mobile_topbar_menu', [ \OverlayML\Switcher::class, 'print' ], (int) $s['priority'] );
+			foreach ( [ 'nasa_topbar_menu', 'nasa_mobile_topbar_menu' ] as $hook ) {
+				add_action( $hook, [ __CLASS__, 'buffer_start' ], (int) $s['priority'] - 1 );
+				add_action( $hook, [ __CLASS__, 'buffer_merge' ], 11 );
+			}
 		}
 		add_filter( 'nasa_title_first_breadcrumb', [ __CLASS__, 'archive_heading' ], 50 );
 		add_filter( 'nasa_theme_options', [ __CLASS__, 'options' ], 50 );
@@ -69,12 +81,31 @@ class Elessi {
 				$items .= sprintf( '<li class="nasa-item-lang"><a href="%s" hreflang="%s" lang="%s" translate="no">%s</a></li>', esc_url( $link['url'] ), esc_attr( $lang ), esc_attr( $lang ), esc_html( $link['label'] ) );
 			}
 		}
-		return sprintf(
-			'<ul class="header-multi-languages ovml-switcher-elessi left rtl-right"><li class="nasa-select-languages left rtl-right desktop-margin-right-30 rtl-desktop-margin-right-0 rtl-desktop-margin-left-30 menu-item-has-children root-item li_accordion"><a href="javascript:void(0);" class="nasa-current-lang" rel="nofollow" translate="no">%s</a><ul class="nasa-list-languages sub-menu">%s</ul>%s</li></ul>',
+		self::$item = sprintf(
+			'<li class="nasa-select-languages left rtl-right desktop-margin-right-30 rtl-desktop-margin-right-0 rtl-desktop-margin-left-30 menu-item-has-children root-item li_accordion"><a href="javascript:void(0);" class="nasa-current-lang" rel="nofollow" translate="no">%s</a><ul class="nasa-list-languages sub-menu">%s</ul>%s</li>',
 			esc_html( $links[ $current ]['label'] ?? strtoupper( $current ) ),
 			$items,
 			$arrow
 		);
+		return self::OPEN . self::$item . '</ul>';
+	}
+
+	public static function buffer_start() {
+		ob_start();
+	}
+
+	/** Moves the language item into the theme's list when the theme printed one. */
+	public static function buffer_merge() {
+		$html  = (string) ob_get_clean();
+		$ours  = self::OPEN . self::$item . '</ul>';
+		$theme = '<ul class="header-multi-languages left rtl-right';
+		$at    = strpos( $html, $theme );
+		if ( '' !== self::$item && false !== $at && false !== strpos( $html, $ours ) ) {
+			$end  = strpos( $html, '>', $at ) + 1;
+			$open = str_replace( 'class="header-multi-languages ', 'class="header-multi-languages ovml-switcher-elessi ', substr( $html, $at, $end - $at ) );
+			$html = str_replace( $ours, '', substr( $html, 0, $at ) . $open . self::$item . substr( $html, $end ) );
+		}
+		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput -- already escaped markup.
 	}
 
 	/** Elessi prints archive titles as the first breadcrumb item. */
