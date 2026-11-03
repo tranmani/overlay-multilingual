@@ -1,6 +1,7 @@
 <?php
 /**
- * Elessi theme (NasaTheme): native top-bar switcher and translated archive H1.
+ * Elessi theme (NasaTheme): native top-bar switcher, translated archive H1 and
+ * a cache that cannot mix languages.
  *
  * Elessi prints its language/currency block on `nasa_topbar_menu` and
  * `nasa_mobile_topbar_menu` (priority 10) using WPML markup. With the switcher
@@ -35,6 +36,19 @@ class Elessi {
 			add_action( 'nasa_mobile_topbar_menu', [ \OverlayML\Switcher::class, 'print' ], (int) $s['priority'] );
 		}
 		add_filter( 'nasa_title_first_breadcrumb', [ __CLASS__, 'archive_heading' ], 50 );
+		add_filter( 'nasa_theme_options', [ __CLASS__, 'options' ], 50 );
+	}
+
+	/**
+	 * nasa-core caches swatches, quick views and shortcodes by product and
+	 * currency only, so a page rendered in one language was served in all of
+	 * them. Secondary languages skip that cache; the default language keeps it.
+	 */
+	public static function options( $options ) {
+		if ( is_array( $options ) && ! ovml_is_default() ) {
+			$options['enable_nasa_cache'] = 0;
+		}
+		return $options;
 	}
 
 	public static function preset( $presets ) {
