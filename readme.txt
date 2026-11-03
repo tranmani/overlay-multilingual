@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.4.2
+Stable tag: 1.4.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,10 @@ WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file
 
 == Changelog ==
 
+
+= 1.4.3 =
+* Fixed: WooCommerce attribute names (colours, sizes) could show in another language, because WooCommerce caches product terms without the language. Affected variation dropdowns, swatches and product schema.
+* Fixed: with the Elessi theme, cached swatches and quick views could show another language's attribute names. Secondary languages now bypass the nasa-core cache.
 = 1.4.2 =
 * Fix: pages whose slug starts with a language code returned 404 in that language (e.g. /de/delivery-information/). WordPress strips the home path from the request, and the prefixed home URL made it strip the language code a second time, from the slug.
 * Language sitemaps no longer list product attributes without archives (they appeared as ?taxonomy=pa_...&term=... URLs that only showed the home page).
