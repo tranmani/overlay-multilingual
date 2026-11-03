@@ -29,6 +29,7 @@ class Content {
 		add_filter( 'get_the_terms', [ __CLASS__, 'terms' ], 5 );
 		add_filter( 'wp_get_object_terms', [ __CLASS__, 'terms' ], 5 );
 		add_filter( 'single_term_title', [ __CLASS__, 'single_term_title' ], 5 );
+		add_filter( 'woocommerce_get_product_terms', [ __CLASS__, 'product_terms' ], 5, 4 );
 	}
 
 	public static function title( $title, $id = 0 ) {
@@ -75,6 +76,40 @@ class Content {
 			}
 		}
 		return $terms;
+	}
+
+	/**
+	 * WooCommerce caches wc_get_product_terms() per product, and the cache key has
+	 * no language. Whatever language filled it would be served to every visitor
+	 * (Dutch colour names on English pages), so rebuild names for this request.
+	 */
+	public static function product_terms( $terms, $product_id, $taxonomy, $args ) {
+		if ( ! is_array( $terms ) ) {
+			return $terms;
+		}
+		$fields = $args['fields'] ?? 'all';
+		if ( 'names' === $fields || 'id=>name' === $fields ) {
+			$ids   = wc_get_product_terms( $product_id, $taxonomy, array_merge( $args, [ 'fields' => 'ids' ] ) );
+			$names = array_map( [ __CLASS__, 'term_name' ], $ids );
+			return 'names' === $fields ? $names : array_combine( $ids, $names );
+		}
+		foreach ( $terms as $i => $term ) {
+			if ( $term instanceof \WP_Term ) {
+				$raw = \WP_Term::get_instance( $term->term_id, $term->taxonomy );
+				if ( $raw instanceof \WP_Term ) {
+					$term              = clone $term;
+					$term->name        = $raw->name;
+					$term->description = $raw->description;
+					$terms[ $i ]       = self::term( $term );
+				}
+			}
+		}
+		return $terms;
+	}
+
+	private static function term_name( $term_id ) {
+		$raw = \WP_Term::get_instance( (int) $term_id );
+		return $raw instanceof \WP_Term ? self::term( $raw )->name : '';
 	}
 
 	public static function single_term_title( $title ) {
