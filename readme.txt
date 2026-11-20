@@ -4,7 +4,7 @@ Tags: multilingual, translation, woocommerce, hreflang, language switcher
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 1.4.4
+Stable tag: 1.4.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,8 @@ WP-CLI: `wp ovml status`, `wp ovml import <file>`, `wp ovml export [--file=<file
 
 == Changelog ==
 
+= 1.4.5 =
+* Fixed: a rewrite flush during a secondary-language request wrote the language prefix into .htaccess ("RewriteBase /pl/"), so every pretty URL returned a 500 error. The rewrite rules now always use the site root.
 
 = 1.4.4 =
 * Fixed: with the Elessi theme, the currency switcher was missing from the mobile menu. The language switcher now goes into the theme's own language/currency list instead of a second list next to it.

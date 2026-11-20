@@ -24,6 +24,7 @@ class Router {
 		add_filter( 'home_url', [ __CLASS__, 'home_url' ], 20 );
 		add_filter( 'do_parse_request', [ __CLASS__, 'start_parsing' ], PHP_INT_MAX );
 		add_action( 'parse_request', [ __CLASS__, 'stop_parsing' ], PHP_INT_MIN );
+		add_filter( 'mod_rewrite_rules', [ __CLASS__, 'unprefix_rewrite_rules' ], PHP_INT_MAX );
 		add_filter( 'post_link', [ __CLASS__, 'separate_post_link' ], 20, 2 );
 		add_filter( 'post_type_link', [ __CLASS__, 'separate_post_link' ], 20, 2 );
 		add_filter( 'redirect_canonical', [ __CLASS__, 'redirect_canonical' ], 20, 2 );
@@ -90,6 +91,25 @@ class Router {
 
 	public static function stop_parsing() {
 		self::$parsing = false;
+	}
+
+	/**
+	 * WordPress takes the .htaccess RewriteBase from home_url(). A rewrite flush during a
+	 * secondary-language request (any plugin can trigger one) therefore wrote "RewriteBase /pl/"
+	 * and "/pl/index.php", and every pretty URL looped into a 500. Always write the unprefixed root.
+	 */
+	public static function unprefix_rewrite_rules( $rules ) {
+		$plain    = trailingslashit( (string) wp_parse_url( ovml_root(), PHP_URL_PATH ) );
+		$prefixed = trailingslashit( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ) );
+		if ( $plain === $prefixed ) {
+			return $rules;
+		}
+		$base = preg_quote( $prefixed, '#' );
+		return preg_replace(
+			[ '#^(RewriteBase )' . $base . '$#m', '#^(RewriteRule \. )' . $base . 'index\.php#m' ],
+			[ '${1}' . $plain, '${1}' . $plain . 'index.php' ],
+			$rules
+		);
 	}
 
 	/** Separate-mode posts always live under their own language's prefix. */
